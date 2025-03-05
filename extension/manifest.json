@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "Socket Friends",
+  "version": "1.0.0",
+  "description": "See your friends' cursors in real-time on the new tab page",
+  "icons": {
+    "16": "assets/icon.png",
+    "48": "assets/icon.png",
+    "128": "assets/icon.png"
+  },
+  "action": {
+    "default_icon": {
+      "16": "assets/icon.png",
+      "48": "assets/icon.png",
+      "128": "assets/icon.png"
+    },
+    "default_title": "Socket Friends"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "chrome_url_overrides": {
+    "newtab": "newtab/newtab.html"
+  },
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": true
+  },
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "http://localhost:3000/*",
+    "https://socket-friend-b0t7.onrender.com/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; connect-src 'self' ws://localhost:3000 wss://localhost:3000 http://localhost:3000 wss://socket-friend-b0t7.onrender.com https://socket-friend-b0t7.onrender.com;"
+  }
+} 

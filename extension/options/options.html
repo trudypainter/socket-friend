@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Socket Friends - Options</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Socket Friends Options</h1>
+      <p>Customize your collaborative cursor experience</p>
+    </header>
+    
+    <main>
+      <form id="options-form">
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input type="text" id="username" name="username" placeholder="Enter your username">
+          <p class="help-text">This name will be visible to other users</p>
+        </div>
+        
+        <div class="form-group">
+          <label for="cursor-color">Cursor Color</label>
+          <input type="color" id="cursor-color" name="cursorColor">
+          <p class="help-text">Choose a color for your cursor</p>
+        </div>
+        
+        <div class="form-group">
+          <label for="server-url">Server URL</label>
+          <input type="text" id="server-url" name="serverUrl" placeholder="http://localhost:3000">
+          <p class="help-text">WebSocket server address (advanced)</p>
+        </div>
+        
+        <div class="form-actions">
+          <button type="submit" id="save-button">Save Changes</button>
+          <button type="button" id="reset-button">Reset to Defaults</button>
+        </div>
+      </form>
+    </main>
+    
+    <footer>
+      <p>Socket Friends v1.0.0</p>
+    </footer>
+  </div>
+  
+  <script src="options.js"></script>
+</body>
+</html> 

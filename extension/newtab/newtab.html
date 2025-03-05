@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Socket Friends</title>
+  <link rel="stylesheet" href="newtab.css">
+  <script src="../lib/socket.io.min.js"></script>
+</head>
+<body>
+  <div class="container">
+    <!-- Marquee of all users -->
+    <div class="marquee">
+      <div class="marquee-content" id="marquee-content">
+        <span class="marquee-text">🌟 PEOPLE HERE: </span>
+      </div>
+    </div>
+    
+    <!-- Main play area -->
+    <div class="main-content">
+      <!-- Canvas for cursor interactions -->
+      <div class="play-area" id="play-area">
+        <!-- Cursors will be added here dynamically -->
+      </div>
+      
+      <!-- Sidepanel -->
+      <div class="side-panel">
+        <h3>menu</h3>
+        
+        <!-- Online users list -->
+        <div class="users-list" id="users-list">
+          <!-- Users will be added here dynamically -->
+        </div>
+        
+        <!-- User settings at bottom -->
+        <div class="user-settings" id="user-settings">
+          <!-- Current user info will be added here -->
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <script src="newtab.js"></script>
+</body>
+</html> 

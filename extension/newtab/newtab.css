@@ -1,0 +1,178 @@
+/* Socket Friends - New Tab Page Styles */
+
+:root {
+  --bg-color: #ffffff;
+  --text-color: #000000;
+  --border-color: #cccccc;
+  --panel-bg: #f8f8f8;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: Arial, sans-serif;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  height: 100vh;
+  overflow: hidden;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* Marquee styles */
+.marquee {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border-color);
+  overflow: hidden;
+  white-space: nowrap;
+  background-color: var(--bg-color);
+}
+
+.marquee-content {
+  display: inline-block;
+  animation: marquee 15s linear infinite;
+}
+
+@keyframes marquee {
+  0% { transform: translateX(100vw); }
+  100% { transform: translateX(-100%); }
+}
+
+.marquee-text {
+  font-weight: bold;
+}
+
+.user-name {
+  margin: 0 4px;
+}
+
+/* Main content area */
+.main-content {
+  display: flex;
+  flex: 1;
+  height: calc(100vh - 37px); /* Account for marquee height */
+}
+
+/* Play area */
+.play-area {
+  flex: 1;
+  position: relative;
+  background-color: var(--bg-color);
+  cursor: none; /* Hide default cursor */
+  overflow: hidden;
+}
+
+/* Side panel */
+.side-panel {
+  width: 250px;
+  border-left: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+  background-color: var(--panel-bg);
+}
+
+.side-panel h3 {
+  margin-bottom: 20px;
+}
+
+/* Users list */
+.users-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.user-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.user-cursor {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  margin-right: 10px;
+}
+
+/* User settings */
+.user-settings {
+  border-top: 1px solid var(--border-color);
+  padding-top: 16px;
+  margin-top: auto;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.edit-field {
+  display: flex;
+  margin-bottom: 8px;
+}
+
+.edit-field a {
+  text-decoration: none;
+  color: #666;
+  margin-left: 8px;
+}
+
+/* Cursor styles */
+.remote-cursor, .local-cursor {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 10;
+  transition: transform 0.1s ease-out;
+}
+
+.local-cursor {
+  pointer-events: none; /* Prevent cursor from interfering with clicks */
+}
+
+.cursor-label {
+  position: absolute;
+  bottom: -20px;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  text-align: center;
+  font-size: 12px;
+  color: #333;
+  text-shadow: 0px 0px 2px rgba(255, 255, 255, 0.8);
+}
+
+/* Ripple effect */
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: rippleEffect 1s ease-out forwards;
+  opacity: 0.7;
+  z-index: 5;
+}
+
+@keyframes rippleEffect {
+  0% {
+    width: 0;
+    height: 0;
+    opacity: 0.7;
+  }
+  100% {
+    width: 200px;
+    height: 200px;
+    opacity: 0;
+  }
+} 
