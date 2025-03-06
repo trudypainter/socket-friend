@@ -143,23 +143,34 @@ class EmojiDrawingMode {
     
     // Emit event to server with userId
     if (this.socket?.connected) {
-      this.socket.emit('emoji:draw', {
+      const emojiData = {
         userId: this.userId,
         position: { x, y },
         emoji,
         size: this.emojiSize,
         timestamp: Date.now()
-      });
+      };
+      
+      console.log(`🚀 EMOJI EMIT: Sending emoji:draw to server:`, emojiData);
+      this.socket.emit('emoji:draw', emojiData);
+      
+      // Debug socket state
+      console.log(`🔌 SOCKET STATE: Connected=${this.socket.connected}, ID=${this.socket.id}`);
+    } else {
+      console.warn(`⚠️ EMOJI EMIT FAILED: Socket not connected or unavailable`);
     }
     
     // Emit event locally
-    eventBus.emit('emoji:draw', {
+    const localEventData = {
       userId: this.userId,
       position: { x, y },
       emoji,
       size: this.emojiSize,
       timestamp: Date.now()
-    });
+    };
+    
+    console.log(`📢 EMOJI LOCAL: Emitting local emoji:draw event:`, localEventData);
+    eventBus.emit('emoji:draw', localEventData);
   }
   
   /**

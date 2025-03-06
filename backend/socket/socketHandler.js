@@ -159,14 +159,31 @@ module.exports = (io) => {
     
     // Handle emoji drawing events
     socket.on('emoji:draw', (data) => {
-      // Add user ID to the data
+      console.log(`🎯 SERVER EMOJI RECEIVED: User ${userId} sent emoji:draw event:`, {
+        emoji: data.emoji,
+        position: data.position,
+        timestamp: data.timestamp
+      });
+      
+      // Add user ID to the data if not already present
       const emojiData = {
         ...data,
-        userId
+        userId: data.userId || userId // Use provided userId or socket userId
       };
+      
+      // Check for required fields
+      if (!emojiData.position || !emojiData.emoji) {
+        console.error(`❌ SERVER EMOJI ERROR: Invalid emoji data received:`, emojiData);
+        return;
+      }
+      
+      // Log active connections
+      const roomSize = io.sockets.adapter.rooms.get(GLOBAL_ROOM)?.size || 0;
+      console.log(`📊 SERVER STATS: Emitting to ${roomSize - 1} other users in ${GLOBAL_ROOM}`);
       
       // Broadcast to others in the room
       socket.to(GLOBAL_ROOM).emit('emoji:draw', emojiData);
+      console.log(`📢 SERVER EMOJI BROADCAST: Sent emoji:draw to room ${GLOBAL_ROOM}`);
     });
     
     // Handle sword combat attack events

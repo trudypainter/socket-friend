@@ -368,40 +368,56 @@ function createUserSettingsUI() {
 
 // Connect to WebSocket server
 function connectToServer() {
+  console.log('🔌 CONNECT: Attempting to connect to server at', serverUrl);
+  
   try {
     // Initialize Socket.io connection
     socket = io(serverUrl);
+    console.log('🔌 CONNECT: Socket.io instance created');
+    
+    // Debug socket object
+    console.log('🔍 SOCKET DEBUG: Socket created with ID:', socket.id);
+    console.log('🔍 SOCKET DEBUG: Socket connection state:', socket.connected ? 'Connected' : 'Disconnected');
     
     // Connection event handlers
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
     socket.on('connect_error', handleConnectionError);
+    console.log('🔌 CONNECT: Basic connection handlers registered');
     
     // User event handlers
     socket.on('user:connected', handleUserConnected);
     socket.on('user:joined', handleUserJoined);
     socket.on('user:left', handleUserLeft);
     socket.on('user:updated', handleUserUpdated);
+    console.log('👤 CONNECT: User event handlers registered');
     
     // Cursor event handlers
     socket.on('cursor:update', handleCursorUpdate);
     socket.on('cursor:click', handleRemoteClick);
+    console.log('🖱️ CONNECT: Cursor event handlers registered');
     
     // Emoji drawing event handler
     socket.on('emoji:draw', handleRemoteEmojiDraw);
+    console.log('🎨 CONNECT: Emoji drawing event handler registered');
     
     // Get all users
     socket.on('users:all', handleAllUsers);
+    console.log('👥 CONNECT: Users:all event handler registered');
+    
+    // List all registered event listeners
+    console.log('📋 CONNECT: All registered event handlers:', Object.keys(socket._callbacks).join(', '));
   } catch (error) {
-    console.error('Failed to connect to server:', error);
+    console.error('❌ CONNECT ERROR:', error);
   }
 }
 
 // Handle successful connection
 function handleConnect() {
-  console.log('Connected to server');
-  console.log('Sending user join with profilePhotoUrl:', profilePhotoUrl);
-  console.log('Sending user color:', cursorColor);
+  console.log('🟢 CONNECTED: Successfully connected to server');
+  console.log('🆔 CONNECTED: Socket ID:', socket.id);
+  console.log('📸 CONNECTED: User profile photo URL:', profilePhotoUrl);
+  console.log('🎨 CONNECTED: User cursor color:', cursorColor);
   
   // Send user info upon connection
   socket?.emit('user:join', {
@@ -409,17 +425,55 @@ function handleConnect() {
     cursorColor: cursorColor,
     profilePhotoUrl: profilePhotoUrl
   });
+  console.log('📤 CONNECTED: Sent user:join event');
   
   // Initialize mode manager with socket and userId
   if (window.modeManager && userId) {
+    console.log('🎮 CONNECTED: Initializing mode manager with socket and userId:', userId);
     window.modeManager.init(socket, userId);
     
     // Initialize modes
-    if (window.drawingMode) window.drawingMode.init(socket, userId);
-    if (window.musicMode) window.musicMode.init(socket, userId);
-    if (window.combatMode) window.combatMode.init(socket, userId);
+    if (window.drawingMode) {
+      console.log('🖌️ CONNECTED: Initializing drawing mode');
+      window.drawingMode.init(socket, userId);
+    }
     
-    console.log('✅ MODE: Modes initialized with socket connection');
+    if (window.musicMode) {
+      console.log('🎵 CONNECTED: Initializing music mode');
+      window.musicMode.init(socket, userId);
+    }
+    
+    if (window.combatMode) {
+      console.log('⚔️ CONNECTED: Initializing combat mode');
+      window.combatMode.init(socket, userId);
+    }
+    
+    if (window.emojiDrawingMode) {
+      console.log('🎭 CONNECTED: Initializing emoji drawing mode');
+      window.emojiDrawingMode.init(socket, userId);
+      
+      // Debug emoji drawing mode
+      console.log('🔍 EMOJI MODE DEBUG:', {
+        isActive: window.emojiDrawingMode.isActive,
+        emojis: window.emojiDrawingMode.emojis,
+        emojiSize: window.emojiDrawingMode.emojiSize,
+        socketConnected: window.emojiDrawingMode.socket?.connected
+      });
+    }
+    
+    if (window.swordCombatMode) {
+      console.log('🗡️ CONNECTED: Initializing sword combat mode');
+      window.swordCombatMode.init(socket, userId);
+    }
+    
+    if (window.chatMode) {
+      console.log('💬 CONNECTED: Initializing chat mode');
+      window.chatMode.init(socket, userId);
+    }
+    
+    console.log('✅ CONNECTED: All modes initialized');
+  } else {
+    console.warn('⚠️ CONNECTED: Could not initialize modes - missing modeManager or userId');
   }
 }
 
@@ -749,10 +803,25 @@ function createLocalCursor() {
  * @param {Object} data - Emoji drawing data
  */
 function handleRemoteEmojiDraw(data) {
+  console.log(`📥 EMOJI RECEIVE: Received emoji:draw from server:`, data);
+  
+  // Check data integrity
+  if (!data || !data.position || !data.emoji) {
+    console.error(`❌ EMOJI RECEIVE ERROR: Invalid emoji data received:`, data);
+    return;
+  }
+  
   // Skip if this is our own emoji (already handled locally)
-  if (data.userId === userId) return;
+  if (data.userId === userId) {
+    console.log(`🔄 EMOJI RECEIVE: Skipping own emoji drawing`);
+    return;
+  }
+  
+  const userInfo = activeUsers.get(data.userId);
+  console.log(`👤 EMOJI USER: Drawing from user ${data.userId}`, userInfo ? userInfo.username : 'Unknown user');
   
   // Create emoji element
+  console.log(`🎨 EMOJI DRAWING: Creating emoji at position (${data.position.x}, ${data.position.y})`);
   createEmojiElement(data.position.x, data.position.y, data.emoji, data.size, data.userId);
 }
 
@@ -765,6 +834,15 @@ function handleRemoteEmojiDraw(data) {
  * @param {string} remoteUserId - ID of user who created the emoji
  */
 function createEmojiElement(x, y, emoji, size = 40, remoteUserId = null) {
+  // Get play area
+  const playArea = document.getElementById('play-area');
+  if (!playArea) {
+    console.error('❌ EMOJI RENDER: Play area not found, cannot render emoji');
+    return;
+  }
+  
+  console.log('🎭 EMOJI RENDER: Creating emoji element:', { x, y, emoji, size, remoteUserId });
+  
   // Create element
   const element = document.createElement('div');
   element.className = 'emoji-drawing';
@@ -793,21 +871,27 @@ function createEmojiElement(x, y, emoji, size = 40, remoteUserId = null) {
       if (user.cursorColor) {
         element.style.textShadow = `0 0 3px ${user.cursorColor}`;
       }
+      console.log(`🎨 EMOJI STYLE: Added attribution for user ${user.username}`);
+    } else {
+      console.warn(`⚠️ EMOJI USER: User ${remoteUserId} not found in active users`);
     }
   }
   
   // Add to DOM
   playArea.appendChild(element);
+  console.log('✅ EMOJI RENDER: Emoji added to play area');
   
   // Set timeout for fading - use the same timing as in the emoji mode
   const fadeTimeout = 2000; // Time in ms before emoji starts to fade
   
   setTimeout(() => {
     element.style.opacity = '0';
+    console.log('🌫️ EMOJI FADE: Emoji starting to fade out');
     
     // Remove after fade
     setTimeout(() => {
       element.remove();
+      console.log('🗑️ EMOJI CLEANUP: Emoji element removed from DOM');
     }, 1000);
   }, fadeTimeout);
 }
