@@ -25,6 +25,7 @@ module.exports = (io) => {
         socketId: socket.id,
         username: userData.username || `User ${userId.substring(0, 5)}`,
         cursorColor: userData.cursorColor || '#000000',
+        profilePhotoUrl: userData.profilePhotoUrl || '',
         connectedAt: new Date()
       });
       
@@ -41,7 +42,8 @@ module.exports = (io) => {
       socket.to(GLOBAL_ROOM).emit('user:joined', {
         userId,
         username: userData.username,
-        cursorColor: userData.cursorColor
+        cursorColor: userData.cursorColor,
+        profilePhotoUrl: userData.profilePhotoUrl
       });
     });
     
@@ -57,6 +59,10 @@ module.exports = (io) => {
         
         if (userData.cursorColor) {
           user.cursorColor = userData.cursorColor;
+        }
+        
+        if (userData.profilePhotoUrl) {
+          user.profilePhotoUrl = userData.profilePhotoUrl;
         }
         
         // Save updated user

@@ -11,10 +11,11 @@ let socket = null;
 let userId = null;
 let username = '';
 let cursorColor = '';
+let profilePhotoUrl = ''; // Add profile photo URL
 // Production URL
-let serverUrl = 'https://socket-friend-b0t7.onrender.com';
+const serverUrl = 'https://socket-friend-b0t7.onrender.com';
 // For local development: let serverUrl = 'http://localhost:3000';
-let activeUsers = new Map();
+const activeUsers = new Map();
 let throttleTimer = null;
 let localCursor = null; // Reference to local cursor element
 const THROTTLE_DELAY = 50; // ms
@@ -23,6 +24,9 @@ const THROTTLE_DELAY = 50; // ms
 async function init() {
   // Load or create user settings
   await loadUserSettings();
+  
+  // Get user profile photo
+  await getProfilePhoto();
   
   // Initialize user settings UI
   createUserSettingsUI();
@@ -34,13 +38,61 @@ async function init() {
   setupEventListeners();
 }
 
+// Get user profile photo using Chrome Identity API
+async function getProfilePhoto() {
+  return new Promise((resolve) => {
+    try {
+      chrome.identity?.getProfileUserInfo({ accountStatus: 'ANY' }, (userInfo) => {
+        if (userInfo && userInfo.email) {
+          // Get profile photo using People API
+          chrome.identity?.getAuthToken({ interactive: true }, (token) => {
+            if (chrome.runtime.lastError) {
+              console.error('Error getting auth token:', chrome.runtime.lastError);
+              resolve();
+              return;
+            }
+            
+            fetch('https://people.googleapis.com/v1/people/me?personFields=photos', {
+              headers: {
+                'Authorization': `Bearer ${token}`
+              }
+            })
+            .then(response => response.json())
+            .then(data => {
+              if (data.photos && data.photos.length > 0) {
+                profilePhotoUrl = data.photos[0].url;
+                console.log('Got profile photo:', profilePhotoUrl);
+                
+                // Save to storage
+                chrome.storage.local.set({ profilePhotoUrl });
+              }
+              resolve();
+            })
+            .catch(error => {
+              console.error('Error fetching profile photo:', error);
+              resolve();
+            });
+          });
+        } else {
+          // No user info available
+          resolve();
+        }
+      });
+    } catch (error) {
+      console.error('Error getting profile info:', error);
+      resolve();
+    }
+  });
+}
+
 // Load user settings from storage or create default
 async function loadUserSettings() {
   return new Promise((resolve) => {
-    chrome.storage.local.get(['username', 'cursorColor'], (result) => {
+    chrome.storage.local.get(['username', 'cursorColor', 'profilePhotoUrl'], (result) => {
       if (result.username && result.cursorColor) {
         username = result.username;
         cursorColor = result.cursorColor;
+        profilePhotoUrl = result.profilePhotoUrl || '';
       } else {
         // Create default settings if not found
         username = `user_${Math.floor(Math.random() * 10000)}`;
@@ -167,9 +219,10 @@ function handleConnect() {
   console.log('Connected to server');
   
   // Send user info upon connection
-  socket.emit('user:join', {
+  socket?.emit('user:join', {
     username: username,
-    cursorColor: cursorColor
+    cursorColor: cursorColor,
+    profilePhotoUrl: profilePhotoUrl
   });
 }
 
@@ -179,7 +232,9 @@ function handleDisconnect() {
   
   // Remove all remote cursors
   const cursors = document.querySelectorAll('.remote-cursor');
-  cursors.forEach(cursor => cursor.remove());
+  for (const cursor of cursors) {
+    cursor.remove();
+  }
   
   // Clear users list
   activeUsers.clear();
@@ -203,7 +258,8 @@ function handleUserConnected(data) {
   activeUsers.set(userId, {
     id: userId,
     username: username,
-    color: cursorColor
+    color: cursorColor,
+    profilePhotoUrl: profilePhotoUrl
   });
   
   // Update UI
@@ -212,19 +268,18 @@ function handleUserConnected(data) {
 
 // Handle user joined event (for other users)
 function handleUserJoined(data) {
-  console.log('User joined:', data);
+  console.log('User joined:', data.userId);
   
-  // Add to active users if not already present
-  if (!activeUsers.has(data.userId)) {
-    activeUsers.set(data.userId, {
-      id: data.userId,
-      username: data.username || `User ${data.userId.substring(0, 5)}`,
-      color: data.cursorColor || getRandomColor()
-    });
-    
-    // Update UI
-    updateUsersUI();
-  }
+  // Add to active users
+  activeUsers.set(data.userId, {
+    id: data.userId,
+    username: data.username || `User ${data.userId.substring(0, 5)}`,
+    color: data.cursorColor || getRandomColor(),
+    profilePhotoUrl: data.profilePhotoUrl || ''
+  });
+  
+  // Update UI
+  updateUsersUI();
 }
 
 // Handle user left event
@@ -246,67 +301,56 @@ function handleUserLeft(data) {
 
 // Handle user updated event
 function handleUserUpdated(data) {
-  console.log('User updated:', data);
+  // Skip if it's our own update
+  if (data.userId === userId) return;
   
-  // Update user data
-  if (activeUsers.has(data.userId)) {
-    const userData = activeUsers.get(data.userId);
+  // Get existing user data
+  const user = activeUsers.get(data.userId);
+  
+  if (user) {
+    // Update user data
+    if (data.username) user.username = data.username;
+    if (data.cursorColor) user.color = data.cursorColor;
+    if (data.profilePhotoUrl) user.profilePhotoUrl = data.profilePhotoUrl;
     
-    if (data.username) {
-      userData.username = data.username;
-    }
-    
-    if (data.cursorColor) {
-      userData.color = data.cursorColor;
+    // Update cursor element if it exists
+    const cursorElement = document.getElementById(`cursor-${data.userId}`);
+    if (cursorElement) {
+      cursorElement.style.backgroundColor = user.color;
       
-      // Update cursor color if exists
-      const cursorElement = document.getElementById(`cursor-${data.userId}`);
-      if (cursorElement) {
-        cursorElement.style.backgroundColor = data.cursorColor;
+      // Update profile photo if available
+      const photoElement = cursorElement.querySelector('.cursor-photo');
+      if (photoElement && user.profilePhotoUrl) {
+        photoElement.style.backgroundImage = `url(${user.profilePhotoUrl})`;
+      }
+      
+      // Update label
+      const labelElement = cursorElement.querySelector('.cursor-label');
+      if (labelElement) {
+        labelElement.textContent = user.username;
       }
     }
-    
-    activeUsers.set(data.userId, userData);
     
     // Update UI
     updateUsersUI();
   }
-  
-  // Update local cursor if it's our data
-  if (data.userId === userId) {
-    if (data.username) {
-      username = data.username;
-    }
-    
-    if (data.cursorColor) {
-      cursorColor = data.cursorColor;
-    }
-    
-    // Update local cursor
-    if (localCursor) {
-      localCursor.style.backgroundColor = cursorColor;
-      const label = localCursor.querySelector('.cursor-label');
-      if (label) {
-        label.textContent = username;
-      }
-    }
-  }
 }
 
-// Handle all users event
+// Handle all users data
 function handleAllUsers(data) {
   console.log('Received all users:', data);
   
   // Update active users map
-  data.forEach(user => {
+  for (const user of data) {
     if (!activeUsers.has(user.id)) {
       activeUsers.set(user.id, {
         id: user.id,
         username: user.username || `User ${user.id.substring(0, 5)}`,
-        color: user.cursorColor || getRandomColor()
+        color: user.cursorColor || getRandomColor(),
+        profilePhotoUrl: user.profilePhotoUrl || ''
       });
     }
-  });
+  }
   
   // Update UI
   updateUsersUI();
@@ -323,13 +367,30 @@ function handleCursorUpdate(data) {
   if (!cursorElement) {
     const user = activeUsers.get(data.userId) || { 
       color: getRandomColor(),
-      username: `User ${data.userId.substring(0, 5)}`
+      username: `User ${data.userId.substring(0, 5)}`,
+      profilePhotoUrl: ''
     };
     
     cursorElement = document.createElement('div');
     cursorElement.id = `cursor-${data.userId}`;
     cursorElement.className = 'remote-cursor';
-    cursorElement.style.backgroundColor = user.color;
+    cursorElement.style.borderColor = user.color;
+    cursorElement.style.borderWidth = '3px';
+    cursorElement.style.borderStyle = 'solid';
+    cursorElement.style.backgroundColor = 'white';
+    
+    // Add profile photo if available
+    if (user.profilePhotoUrl) {
+      const photoElement = document.createElement('div');
+      photoElement.className = 'cursor-photo';
+      photoElement.style.backgroundImage = `url(${user.profilePhotoUrl})`;
+      photoElement.style.backgroundSize = 'cover';
+      photoElement.style.backgroundPosition = 'center';
+      photoElement.style.width = '100%';
+      photoElement.style.height = '100%';
+      photoElement.style.borderRadius = '50%';
+      cursorElement.appendChild(photoElement);
+    }
     
     const labelElement = document.createElement('div');
     labelElement.className = 'cursor-label';
@@ -376,7 +437,22 @@ function updateUsersUI() {
     
     const cursorElement = document.createElement('div');
     cursorElement.className = 'user-cursor';
-    cursorElement.style.backgroundColor = user.color;
+    cursorElement.style.borderColor = user.color;
+    cursorElement.style.borderWidth = '3px';
+    cursorElement.style.borderStyle = 'solid';
+    cursorElement.style.backgroundColor = 'white';
+    
+    // Add profile photo if available
+    if (user.profilePhotoUrl) {
+      const photoElement = document.createElement('div');
+      photoElement.style.backgroundImage = `url(${user.profilePhotoUrl})`;
+      photoElement.style.backgroundSize = 'cover';
+      photoElement.style.backgroundPosition = 'center';
+      photoElement.style.width = '100%';
+      photoElement.style.height = '100%';
+      photoElement.style.borderRadius = '50%';
+      cursorElement.appendChild(photoElement);
+    }
     
     const nameElement = document.createElement('span');
     nameElement.textContent = id === userId ? `${user.username}` : user.username;
@@ -442,16 +518,16 @@ function handleMouseMove(e) {
 
 // Handle mouse clicks and create ripple effect
 function handleMouseClick(e) {
-  // Get click position relative to play area
+  // Create ripple effect
+  createRippleEffect(e.clientX, e.clientY, cursorColor);
+  
+  // Get position relative to play area
   const rect = playArea.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
   
-  // Create local ripple
-  createRippleEffect(x, y, cursorColor);
-  
   // Send ripple event to server
-  if (socket && socket.connected && userId) {
+  if (socket?.connected && userId) {
     socket.emit('cursor:click', {
       position: { x, y },
       timestamp: Date.now()
@@ -484,27 +560,28 @@ function getRandomColor() {
 
 // Create local cursor element
 function createLocalCursor() {
-  // Remove existing cursor if any
-  const existingCursor = document.getElementById('local-cursor');
-  if (existingCursor) {
-    existingCursor.remove();
+  if (localCursor) return;
+  
+  localCursor = document.createElement('div');
+  localCursor.className = 'local-cursor';
+  localCursor.style.borderColor = cursorColor;
+  localCursor.style.borderWidth = '3px';
+  localCursor.style.borderStyle = 'solid';
+  localCursor.style.backgroundColor = 'white';
+  
+  // Add profile photo if available
+  if (profilePhotoUrl) {
+    const photoElement = document.createElement('div');
+    photoElement.className = 'cursor-photo';
+    photoElement.style.backgroundImage = `url(${profilePhotoUrl})`;
+    photoElement.style.backgroundSize = 'cover';
+    photoElement.style.backgroundPosition = 'center';
+    photoElement.style.width = '100%';
+    photoElement.style.height = '100%';
+    photoElement.style.borderRadius = '50%';
+    localCursor.appendChild(photoElement);
   }
   
-  // Create cursor element
-  localCursor = document.createElement('div');
-  localCursor.id = 'local-cursor';
-  localCursor.className = 'local-cursor';
-  localCursor.style.backgroundColor = cursorColor;
-  
-  // Create label element
-  const labelElement = document.createElement('div');
-  labelElement.className = 'cursor-label';
-  labelElement.textContent = username;
-  
-  // Add label to cursor
-  localCursor.appendChild(labelElement);
-  
-  // Add cursor to play area
   playArea.appendChild(localCursor);
 }
 
