@@ -13,8 +13,9 @@ let username = '';
 let cursorColor = '';
 let profilePhotoUrl = ''; // Add profile photo URL
 // Production URL
-const serverUrl = 'https://socket-friend-b0t7.onrender.com';
-// For local development: let serverUrl = 'http://localhost:3000';
+// const serverUrl = 'https://socket-friend-b0t7.onrender.com';
+// For local development: 
+const serverUrl = 'http://localhost:3000';
 const activeUsers = new Map();
 let throttleTimer = null;
 let localCursor = null; // Reference to local cursor element
@@ -404,12 +405,30 @@ function connectToServer() {
     socket.on('emoji:draw', handleRemoteEmojiDraw);
     console.log('🎨 CONNECT: Emoji drawing event handler registered');
     
+    // Add global handlers for chat events (as a fallback)
+    socket.on('chat:message', handleGlobalChatMessage);
+    socket.on('chat:typing', handleGlobalChatTyping);
+    socket.on('chat:fade', handleGlobalChatFade);
+    console.log('💬 CONNECT: Global chat event handlers registered');
+    
     // Get all users
     socket.on('users:all', handleAllUsers);
     console.log('👥 CONNECT: Users:all event handler registered');
     
     // List all registered event listeners
     console.log('📋 CONNECT: All registered event handlers:', Object.keys(socket._callbacks).join(', '));
+    
+    // Check if we have any chat-related event listeners at this point
+    const chatListeners = Object.keys(socket._callbacks || {}).filter(key => key.startsWith('$chat:'));
+    console.log('💬 CONNECT: Chat event listeners at socket creation:', chatListeners);
+    
+    // Add a debug listener for all chat events to monitor if they're being received
+    socket.onAny((event, ...args) => {
+      if (event.startsWith('chat:')) {
+        console.log(`🔍 SOCKET EVENT MONITOR: Received ${event} event:`, args[0]);
+      }
+    });
+    console.log('🔍 CONNECT: Added global event monitor for chat events');
   } catch (error) {
     console.error('❌ CONNECT ERROR:', error);
   }
@@ -425,6 +444,11 @@ function handleConnect() {
   // Make socket available globally for use by other modules
   window.socket = socket;
   console.log('🌐 CONNECTED: Socket made available globally as window.socket');
+  
+  // Log socket event listeners
+  if (socket._callbacks) {
+    console.log('🔌 CONNECTED: Initial socket event listeners:', Object.keys(socket._callbacks));
+  }
   
   // Send user info upon connection
   socket?.emit('user:join', {
@@ -476,9 +500,25 @@ function handleConnect() {
     if (window.chatMode) {
       console.log('💬 CONNECTED: Initializing chat mode');
       window.chatMode.init(socket, userId);
+      
+      // Debug chat mode
+      console.log('🔍 CHAT MODE DEBUG:', {
+        isActive: window.chatMode.isActive,
+        socketConnected: window.chatMode.socket?.connected,
+        userId: window.chatMode.userId
+      });
     }
     
     console.log('✅ CONNECTED: All modes initialized');
+    
+    // Log socket event listeners after all modes are initialized
+    if (socket._callbacks) {
+      console.log('🔌 CONNECTED: Socket event listeners after mode initialization:', Object.keys(socket._callbacks));
+      
+      // Specifically check for chat-related event listeners
+      const chatListeners = Object.keys(socket._callbacks).filter(key => key.startsWith('$chat:'));
+      console.log('💬 CONNECTED: Chat event listeners:', chatListeners);
+    }
   } else {
     console.warn('⚠️ CONNECTED: Could not initialize modes - missing modeManager or userId');
   }
@@ -535,34 +575,73 @@ function handleUserConnected(data) {
   updateUsersUI();
 }
 
-// Handle user joined event (for other users)
+// Handle new user joined
 function handleUserJoined(data) {
-  console.log('User joined:', data.userId);
+  console.log('👤 USER JOINED: New user joined:', data.userId);
   
   // Add to active users
-    activeUsers.set(data.userId, {
-      id: data.userId,
-      username: data.username || `User ${data.userId.substring(0, 5)}`,
-    color: data.cursorColor || getRandomColor(),
+  activeUsers.set(data.userId, {
+    id: data.userId,
+    username: data.username || `User ${data.userId.substring(0, 5)}`,
+    cursorColor: data.cursorColor || '#000000',
     profilePhotoUrl: data.profilePhotoUrl || ''
-    });
-    
-    // Update UI
-    updateUsersUI();
-}
-
-// Handle user left event
-function handleUserLeft(data) {
-  console.log('User left:', data.userId);
+  });
   
-  // Remove from active users
-  activeUsers.delete(data.userId);
+  console.log('👤 USER JOINED: Added to active users, total users:', activeUsers.size);
+  console.log('👤 USER JOINED: Active user IDs:', Array.from(activeUsers.keys()));
   
-  // Remove cursor element
-  window.CursorComponent.removeCursor(data.userId);
+  // Create cursor for the new user
+  createCursorForUser(data.userId, data.username, data.cursorColor, data.profilePhotoUrl);
   
   // Update UI
   updateUsersUI();
+  
+  // Log chat-related state
+  if (window.chatMode) {
+    console.log('💬 USER JOINED: Chat mode state when user joined:', {
+      isActive: window.chatMode.isActive,
+      socketConnected: window.chatMode.socket?.connected,
+      userId: window.chatMode.userId
+    });
+  }
+}
+
+// Handle user left
+function handleUserLeft(data) {
+  console.log('👤 USER LEFT: User left:', data.userId);
+  
+  // Remove from active users
+  activeUsers.delete(data.userId);
+  console.log('👤 USER LEFT: Removed from active users, remaining users:', activeUsers.size);
+  console.log('👤 USER LEFT: Remaining user IDs:', Array.from(activeUsers.keys()));
+  
+  // Remove cursor
+  const cursor = document.querySelector(`.remote-cursor[data-user-id="${data.userId}"]`);
+  if (cursor) {
+    cursor.remove();
+    console.log('👤 USER LEFT: Removed cursor element for user:', data.userId);
+  } else {
+    console.warn('👤 USER LEFT: No cursor found for user:', data.userId);
+  }
+  
+  // Remove any chat bubbles from this user
+  const chatBubble = document.querySelector(`.remote-chat-bubble[data-user-id="${data.userId}"]`);
+  if (chatBubble) {
+    chatBubble.remove();
+    console.log('💬 USER LEFT: Removed chat bubble for user:', data.userId);
+  }
+  
+  // Update UI
+  updateUsersUI();
+  
+  // Log chat-related state
+  if (window.chatMode) {
+    console.log('💬 USER LEFT: Chat mode state when user left:', {
+      isActive: window.chatMode.isActive,
+      socketConnected: window.chatMode.socket?.connected,
+      userId: window.chatMode.userId
+    });
+  }
 }
 
 // Handle user updated event
@@ -989,5 +1068,378 @@ function debugEmojiRendering() {
   console.log('🔍 EMOJI DEBUG: Emoji rendering diagnostics complete');
 }
 
+/**
+ * Debug function to check if chat event listeners are properly registered
+ */
+function debugChatEventListeners() {
+  console.log('🔍 CHAT DEBUG: Checking chat event listeners');
+  
+  // Check if socket exists and is connected
+  if (!socket) {
+    console.error('🔍 CHAT DEBUG: Socket is null or undefined');
+    return;
+  }
+  
+  console.log('🔍 CHAT DEBUG: Socket connection state:', socket.connected ? 'Connected' : 'Disconnected');
+  
+  // Check socket event listeners
+  if (socket._callbacks) {
+    const allListeners = Object.keys(socket._callbacks);
+    console.log('🔍 CHAT DEBUG: All socket event listeners:', allListeners);
+    
+    // Check for chat-related event listeners
+    const chatListeners = allListeners.filter(key => key.startsWith('$chat:'));
+    console.log('🔍 CHAT DEBUG: Chat event listeners:', chatListeners);
+    
+    if (chatListeners.length === 0) {
+      console.warn('🔍 CHAT DEBUG WARNING: No chat event listeners found!');
+    } else {
+      console.log('🔍 CHAT DEBUG: Found', chatListeners.length, 'chat event listeners');
+    }
+  } else {
+    console.warn('🔍 CHAT DEBUG: No _callbacks object found on socket');
+  }
+  
+  // Check chat mode state
+  if (window.chatMode) {
+    console.log('🔍 CHAT DEBUG: Chat mode state:', {
+      isActive: window.chatMode.isActive,
+      socketConnected: window.chatMode.socket?.connected,
+      userId: window.chatMode.userId
+    });
+  } else {
+    console.warn('🔍 CHAT DEBUG: Chat mode not initialized');
+  }
+  
+  // Check active users
+  console.log('🔍 CHAT DEBUG: Active users count:', activeUsers.size);
+  console.log('🔍 CHAT DEBUG: Active user IDs:', Array.from(activeUsers.keys()));
+  
+  // Check for remote cursors
+  const remoteCursors = document.querySelectorAll('.remote-cursor');
+  console.log('🔍 CHAT DEBUG: Remote cursors count:', remoteCursors.length);
+  console.log('🔍 CHAT DEBUG: Remote cursor IDs:', Array.from(remoteCursors).map(cursor => cursor.getAttribute('data-user-id')));
+  
+  // Check for chat bubbles
+  const chatBubbles = document.querySelectorAll('.remote-chat-bubble');
+  console.log('🔍 CHAT DEBUG: Chat bubbles count:', chatBubbles.length);
+  console.log('🔍 CHAT DEBUG: Chat bubble IDs:', Array.from(chatBubbles).map(bubble => bubble.getAttribute('data-user-id')));
+}
+
+// Call the debug function after initialization
+setTimeout(debugChatEventListeners, 5000);  // Check 5 seconds after page load
+setTimeout(debugChatEventListeners, 15000); // Check again after 15 seconds
+
 // Initialize when DOM is loaded
-document.addEventListener('DOMContentLoaded', init); 
+document.addEventListener('DOMContentLoaded', init);
+
+/**
+ * Test function to manually send chat events
+ * Can be called from the console for testing
+ */
+function testChatEvents() {
+  console.log('🧪 CHAT TEST: Manual chat event test triggered');
+  
+  if (!socket || !socket.connected) {
+    console.error('🧪 CHAT TEST ERROR: Socket not connected, cannot send test events');
+    return;
+  }
+  
+  // Test chat:typing event
+  const typingData = {
+    userId: userId,
+    message: 'Test typing message...'
+  };
+  console.log('🧪 CHAT TEST: Sending test chat:typing event:', typingData);
+  socket.emit('chat:typing', typingData);
+  
+  // Test chat:message event after a short delay
+  setTimeout(() => {
+    const messageData = {
+      userId: userId,
+      message: 'Test chat message from console!'
+    };
+    console.log('🧪 CHAT TEST: Sending test chat:message event:', messageData);
+    socket.emit('chat:message', messageData);
+    
+    // Test chat:fade event after another delay
+    setTimeout(() => {
+      const fadeData = {
+        userId: userId
+      };
+      console.log('🧪 CHAT TEST: Sending test chat:fade event:', fadeData);
+      socket.emit('chat:fade', fadeData);
+    }, 2000);
+  }, 1000);
+  
+  // Check event listeners
+  debugChatEventListeners();
+}
+
+// Expose test function globally
+window.testChatEvents = testChatEvents;
+
+/**
+ * Global handler for chat messages (fallback if chat mode handler doesn't work)
+ */
+function handleGlobalChatMessage(data) {
+  console.log('🌐 GLOBAL CHAT MESSAGE: Received chat:message event:', data);
+  
+  // Forward to chat mode if available
+  if (window.chatMode?.handleRemoteChat) {
+    console.log('🌐 GLOBAL CHAT MESSAGE: Forwarding to chat mode handler');
+    window.chatMode.handleRemoteChat(data);
+  } else {
+    console.warn('🌐 GLOBAL CHAT MESSAGE: Chat mode not available, handling directly');
+    
+    // Basic implementation to show chat bubble
+    if (data.userId && data.userId !== userId && data.message) {
+      // Find the remote user's cursor
+      const remoteCursor = document.querySelector(`.remote-cursor[data-user-id="${data.userId}"]`);
+      if (remoteCursor) {
+        // Create a simple chat bubble
+        let chatBubble = document.querySelector(`.remote-chat-bubble[data-user-id="${data.userId}"]`);
+        if (!chatBubble) {
+          chatBubble = document.createElement('div');
+          chatBubble.className = 'remote-chat-bubble';
+          chatBubble.setAttribute('data-user-id', data.userId);
+          chatBubble.style.position = 'absolute';
+          chatBubble.style.padding = '12px 20px';
+          chatBubble.style.borderRadius = '20px';
+          chatBubble.style.fontSize = '16px';
+          chatBubble.style.backgroundColor = '#e74c3c';
+          chatBubble.style.color = 'white';
+          chatBubble.style.zIndex = '999';
+          chatBubble.style.opacity = '1';
+          chatBubble.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+          chatBubble.style.transition = 'opacity 0.3s ease';
+          chatBubble.style.pointerEvents = 'none'; // Make sure it doesn't block interactions
+          
+          // Try to get user's color
+          const user = activeUsers.get(data.userId);
+          if (user?.cursorColor) {
+            chatBubble.style.backgroundColor = user.cursorColor;
+          }
+          
+          playArea.appendChild(chatBubble);
+          console.log('🌐 GLOBAL CHAT MESSAGE: Created new chat bubble for user', data.userId);
+        }
+        
+        // Update content and position
+        chatBubble.textContent = data.message;
+        const rect = remoteCursor.getBoundingClientRect();
+        chatBubble.style.left = `${rect.left}px`;
+        chatBubble.style.top = `${rect.bottom + 15}px`;
+        console.log('🌐 GLOBAL CHAT MESSAGE: Positioned bubble at', rect.left, rect.bottom + 15);
+        
+        // Make sure it's visible
+        chatBubble.style.display = 'block';
+        chatBubble.style.opacity = '1';
+        
+        // Fade out after delay
+        setTimeout(() => {
+          chatBubble.style.opacity = '0';
+          setTimeout(() => {
+            chatBubble.parentNode?.removeChild(chatBubble);
+          }, 300);
+        }, 3000);
+      } else {
+        console.warn('🌐 GLOBAL CHAT MESSAGE: Remote cursor not found for user', data.userId);
+        
+        // Try to create a cursor for this user if they're in activeUsers
+        const user = activeUsers.get(data.userId);
+        if (user) {
+          console.log('🌐 GLOBAL CHAT MESSAGE: User found in activeUsers, creating cursor');
+          createCursorForUser(data.userId, user.username, user.cursorColor, user.profilePhotoUrl);
+          
+          // Try again after a short delay to allow cursor to be created
+          setTimeout(() => handleGlobalChatMessage(data), 100);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Global handler for chat typing events (fallback if chat mode handler doesn't work)
+ */
+function handleGlobalChatTyping(data) {
+  console.log('🌐 GLOBAL CHAT TYPING: Received chat:typing event:', data);
+  
+  // Forward to chat mode if available
+  if (window.chatMode?.handleRemoteTyping) {
+    console.log('🌐 GLOBAL CHAT TYPING: Forwarding to chat mode handler');
+    window.chatMode.handleRemoteTyping(data);
+  } else {
+    console.warn('🌐 GLOBAL CHAT TYPING: Chat mode not available, handling directly');
+    
+    // Basic implementation to show typing indicator
+    if (data.userId && data.userId !== userId && data.message) {
+      // Find the remote user's cursor
+      const remoteCursor = document.querySelector(`.remote-cursor[data-user-id="${data.userId}"]`);
+      if (remoteCursor) {
+        // Create a simple chat bubble
+        let chatBubble = document.querySelector(`.remote-chat-bubble[data-user-id="${data.userId}"]`);
+        if (!chatBubble) {
+          chatBubble = document.createElement('div');
+          chatBubble.className = 'remote-chat-bubble';
+          chatBubble.setAttribute('data-user-id', data.userId);
+          chatBubble.style.position = 'absolute';
+          chatBubble.style.padding = '12px 20px';
+          chatBubble.style.borderRadius = '20px';
+          chatBubble.style.fontSize = '16px';
+          chatBubble.style.backgroundColor = '#3498db';
+          chatBubble.style.color = 'white';
+          chatBubble.style.zIndex = '999';
+          chatBubble.style.opacity = '1';
+          chatBubble.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+          chatBubble.style.transition = 'opacity 0.3s ease';
+          chatBubble.style.pointerEvents = 'none'; // Make sure it doesn't block interactions
+          
+          // Try to get user's color
+          const user = activeUsers.get(data.userId);
+          if (user?.cursorColor) {
+            chatBubble.style.backgroundColor = user.cursorColor;
+          }
+          
+          playArea.appendChild(chatBubble);
+          console.log('🌐 GLOBAL CHAT TYPING: Created new chat bubble for user', data.userId);
+        }
+        
+        // Update content and position
+        chatBubble.textContent = data.message;
+        const rect = remoteCursor.getBoundingClientRect();
+        chatBubble.style.left = `${rect.left}px`;
+        chatBubble.style.top = `${rect.bottom + 15}px`;
+        console.log('🌐 GLOBAL CHAT TYPING: Positioned bubble at', rect.left, rect.bottom + 15);
+        
+        // Make sure it's visible
+        chatBubble.style.display = 'block';
+        chatBubble.style.opacity = '1';
+      } else {
+        console.warn('🌐 GLOBAL CHAT TYPING: Remote cursor not found for user', data.userId);
+      }
+    }
+  }
+}
+
+/**
+ * Global handler for chat fade events (fallback if chat mode handler doesn't work)
+ */
+function handleGlobalChatFade(data) {
+  console.log('🌐 GLOBAL CHAT FADE: Received chat:fade event:', data);
+  
+  // Forward to chat mode if available
+  if (window.chatMode?.handleRemoteFade) {
+    console.log('🌐 GLOBAL CHAT FADE: Forwarding to chat mode handler');
+    window.chatMode.handleRemoteFade(data);
+  } else {
+    console.warn('🌐 GLOBAL CHAT FADE: Chat mode not available, handling directly');
+    
+    // Basic implementation to fade out chat bubble
+    if (data.userId && data.userId !== userId) {
+      const chatBubble = document.querySelector(`.remote-chat-bubble[data-user-id="${data.userId}"]`);
+      if (chatBubble) {
+        chatBubble.style.opacity = '0';
+        setTimeout(() => {
+          chatBubble.parentNode?.removeChild(chatBubble);
+        }, 300);
+      }
+    }
+  }
+}
+
+/**
+ * Create a cursor for a remote user
+ * @param {string} userId - User ID
+ * @param {string} username - Username
+ * @param {string} cursorColor - Cursor color
+ * @param {string} profilePhotoUrl - Profile photo URL
+ */
+function createCursorForUser(userId, username, cursorColor, profilePhotoUrl) {
+  console.log('👆 CURSOR: Creating cursor for user', userId, username);
+  
+  // Check if cursor already exists
+  const existingCursor = document.querySelector(`.remote-cursor[data-user-id="${userId}"]`);
+  if (existingCursor) {
+    console.log('👆 CURSOR: Cursor already exists for user', userId);
+    return existingCursor;
+  }
+  
+  // Create cursor element
+  const cursorElement = document.createElement('div');
+  cursorElement.className = 'remote-cursor';
+  cursorElement.setAttribute('data-user-id', userId);
+  
+  // Set initial position (center of screen)
+  cursorElement.style.position = 'absolute';
+  cursorElement.style.left = '50%';
+  cursorElement.style.top = '50%';
+  cursorElement.style.transform = 'translate(-50%, -50%)';
+  cursorElement.style.zIndex = '100';
+  cursorElement.style.pointerEvents = 'none';
+  cursorElement.style.transition = 'transform 0.1s ease-out, left 0.1s ease-out, top 0.1s ease-out';
+  
+  // Create photo container
+  const photoContainer = document.createElement('div');
+  photoContainer.className = 'cursor-photo-container';
+  photoContainer.style.width = '40px';
+  photoContainer.style.height = '40px';
+  photoContainer.style.borderRadius = '50%';
+  photoContainer.style.border = `2px solid ${cursorColor || '#e74c3c'}`;
+  photoContainer.style.overflow = 'hidden';
+  photoContainer.style.backgroundColor = '#fff';
+  photoContainer.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+  
+  // Create photo element if URL is provided
+  if (profilePhotoUrl) {
+    const photoElement = document.createElement('div');
+    photoElement.className = 'cursor-photo';
+    photoElement.style.width = '100%';
+    photoElement.style.height = '100%';
+    photoElement.style.backgroundImage = `url(${profilePhotoUrl})`;
+    photoElement.style.backgroundSize = 'cover';
+    photoElement.style.backgroundPosition = 'center';
+    photoContainer.appendChild(photoElement);
+  } else {
+    // Create initials element if no photo
+    const initialsElement = document.createElement('div');
+    initialsElement.className = 'cursor-initials';
+    initialsElement.style.width = '100%';
+    initialsElement.style.height = '100%';
+    initialsElement.style.display = 'flex';
+    initialsElement.style.alignItems = 'center';
+    initialsElement.style.justifyContent = 'center';
+    initialsElement.style.color = cursorColor || '#e74c3c';
+    initialsElement.style.fontWeight = 'bold';
+    initialsElement.style.fontSize = '16px';
+    initialsElement.textContent = username ? username.charAt(0).toUpperCase() : '?';
+    photoContainer.appendChild(initialsElement);
+  }
+  
+  // Create username label
+  const usernameLabel = document.createElement('div');
+  usernameLabel.className = 'cursor-username';
+  usernameLabel.textContent = username || 'User';
+  usernameLabel.style.position = 'absolute';
+  usernameLabel.style.bottom = '-20px';
+  usernameLabel.style.left = '50%';
+  usernameLabel.style.transform = 'translateX(-50%)';
+  usernameLabel.style.whiteSpace = 'nowrap';
+  usernameLabel.style.fontSize = '12px';
+  usernameLabel.style.fontWeight = 'bold';
+  usernameLabel.style.color = cursorColor || '#e74c3c';
+  
+  // Assemble cursor
+  cursorElement.appendChild(photoContainer);
+  cursorElement.appendChild(usernameLabel);
+  
+  // Add to play area
+  playArea.appendChild(cursorElement);
+  
+  console.log('👆 CURSOR: Created cursor for user', userId);
+  return cursorElement;
+}
+
+// Expose the function globally
+window.createCursorForUser = createCursorForUser; 

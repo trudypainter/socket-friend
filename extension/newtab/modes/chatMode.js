@@ -55,9 +55,43 @@ class ChatMode {
     
     // Set up socket event listeners for remote chat messages
     if (socket) {
-      this.socket.on('chat:message', this.handleRemoteChat);
-      this.socket.on('chat:typing', this.handleRemoteTyping);
-      this.socket.on('chat:fade', this.handleRemoteFade);
+      console.log('💬 CHAT INIT: REGISTERING EVENT LISTENERS for chat events');
+      
+      // Log existing listeners before adding new ones
+      if (socket._callbacks) {
+        const existingEvents = Object.keys(socket._callbacks).filter(key => key.startsWith('$chat:'));
+        console.log('💬 CHAT INIT: Existing chat event listeners:', existingEvents);
+      }
+      
+      // Remove any existing listeners to prevent duplicates
+      socket.off('chat:message', this.handleRemoteChat);
+      socket.off('chat:typing', this.handleRemoteTyping);
+      socket.off('chat:fade', this.handleRemoteFade);
+      console.log('💬 CHAT INIT: Removed any existing chat event listeners');
+      
+      // Add new listeners directly to the socket object
+      socket.on('chat:message', this.handleRemoteChat);
+      socket.on('chat:typing', this.handleRemoteTyping);
+      socket.on('chat:fade', this.handleRemoteFade);
+      
+      // Also register listeners on the global socket for redundancy
+      if (window.socket && window.socket !== socket) {
+        console.log('💬 CHAT INIT: Also registering listeners on global socket');
+        window.socket.off('chat:message', this.handleRemoteChat);
+        window.socket.off('chat:typing', this.handleRemoteTyping);
+        window.socket.off('chat:fade', this.handleRemoteFade);
+        
+        window.socket.on('chat:message', this.handleRemoteChat);
+        window.socket.on('chat:typing', this.handleRemoteTyping);
+        window.socket.on('chat:fade', this.handleRemoteFade);
+      }
+      
+      // Verify listeners were added
+      if (socket._callbacks) {
+        const newEvents = Object.keys(socket._callbacks).filter(key => key.startsWith('$chat:'));
+        console.log('💬 CHAT INIT: Registered chat event listeners:', newEvents);
+      }
+      
       console.log('💬 CHAT INIT: Registered event handlers for chat events');
     } else {
       console.error('💬 CHAT INIT ERROR: Cannot register event handlers - socket is null');
@@ -391,7 +425,10 @@ class ChatMode {
    * Handle remote chat messages from other users
    */
   handleRemoteChat(data) {
-    console.log('💬 CHAT RECEIVE: Received chat:message event:', data);
+    console.log('💬 CHAT RECEIVE: Received chat:message event:', {
+      ...data,
+      isActive: this.isActive
+    });
     
     // Check for required data fields
     if (!data || !data.message) {
@@ -428,6 +465,29 @@ class ChatMode {
         };
       }));
       
+      // Try to create a temporary cursor for this user if they're in activeUsers
+      const user = activeUsers.get(data.userId);
+      if (user) {
+        console.log('💬 CHAT RECEIVE: User found in activeUsers, creating temporary cursor');
+        // Call the global createCursorForUser function if available
+        if (window.createCursorForUser) {
+          window.createCursorForUser(data.userId, user.username, user.cursorColor, user.profilePhotoUrl);
+          console.log('💬 CHAT RECEIVE: Created temporary cursor for user', data.userId);
+          
+          // Try again to find the cursor
+          const newRemoteCursor = document.querySelector(`.remote-cursor[data-user-id="${data.userId}"]`);
+          if (newRemoteCursor) {
+            console.log('💬 CHAT RECEIVE: Successfully created cursor, continuing with chat bubble');
+            // Use the new cursor instead
+            return this.handleRemoteChat(data); // Retry with the new cursor
+          }
+          console.error('💬 CHAT RECEIVE: Failed to create cursor, cannot show chat bubble');
+          return;
+        }
+        console.error('💬 CHAT RECEIVE: createCursorForUser function not available');
+        return;
+      }
+      console.error('💬 CHAT RECEIVE: User not found in activeUsers, cannot create cursor');
       return;
     }
     
@@ -438,7 +498,7 @@ class ChatMode {
       rect: remoteCursor.getBoundingClientRect()
     });
     
-    // Create or update chat bubble for remote user
+    // Create or update chat bubble for remote user - ALWAYS do this regardless of this.isActive
     let chatBubble = document.querySelector(`.remote-chat-bubble[data-user-id="${data.userId}"]`);
     
     if (!chatBubble) {
@@ -461,6 +521,7 @@ class ChatMode {
       chatBubble.style.opacity = '1';
       chatBubble.style.transition = 'opacity 0.3s ease';
       chatBubble.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)'; // Add shadow for depth
+      chatBubble.style.pointerEvents = 'none'; // Make sure it doesn't block interactions
       
       // Match the remote cursor's color (using border color)
       const photoContainer = remoteCursor.querySelector('.cursor-photo-container');
@@ -497,11 +558,16 @@ class ChatMode {
     chatBubble.textContent = data.message;
     console.log('💬 CHAT RECEIVE: Set bubble text to:', data.message);
     
+    // Make sure it's visible
+    chatBubble.style.display = 'block';
+    chatBubble.style.opacity = '1';
+    
     // Need to wait a tick for the width to update after setting content
     setTimeout(() => {
       // Position below and aligned with left edge of cursor
       chatBubble.style.left = `${rect.left}px`;
       chatBubble.style.top = `${rect.bottom + 15}px`;
+      chatBubble.style.opacity = '1'; // Ensure it's visible
       console.log('💬 CHAT RECEIVE: Positioned bubble at left:', rect.left, 'top:', rect.bottom + 15);
       
       // Debug final bubble state
@@ -538,7 +604,8 @@ class ChatMode {
   handleRemoteTyping(data) {
     console.log('💬 CHAT TYPING RECEIVE: Received chat:typing event:', {
       userId: data.userId,
-      messageLength: data.message?.length || 0
+      messageLength: data.message?.length || 0,
+      isActive: this.isActive
     });
     
     // Check for required data fields
@@ -576,6 +643,29 @@ class ChatMode {
         };
       }));
       
+      // Try to create a temporary cursor for this user if they're in activeUsers
+      const user = activeUsers.get(data.userId);
+      if (user) {
+        console.log('💬 CHAT TYPING RECEIVE: User found in activeUsers, creating temporary cursor');
+        // Call the global createCursorForUser function if available
+        if (window.createCursorForUser) {
+          window.createCursorForUser(data.userId, user.username, user.cursorColor, user.profilePhotoUrl);
+          console.log('💬 CHAT TYPING RECEIVE: Created temporary cursor for user', data.userId);
+          
+          // Try again to find the cursor
+          const newRemoteCursor = document.querySelector(`.remote-cursor[data-user-id="${data.userId}"]`);
+          if (newRemoteCursor) {
+            console.log('💬 CHAT TYPING RECEIVE: Successfully created cursor, continuing with chat bubble');
+            // Use the new cursor instead
+            return this.handleRemoteTyping(data); // Retry with the new cursor
+          }
+          console.error('💬 CHAT TYPING RECEIVE: Failed to create cursor, cannot show chat bubble');
+          return;
+        }
+        console.error('💬 CHAT TYPING RECEIVE: createCursorForUser function not available');
+        return;
+      }
+      console.error('💬 CHAT TYPING RECEIVE: User not found in activeUsers, cannot create cursor');
       return;
     }
     
@@ -586,7 +676,7 @@ class ChatMode {
       rect: remoteCursor.getBoundingClientRect()
     });
     
-    // Create or update chat bubble for remote user
+    // Create or update chat bubble for remote user - ALWAYS do this regardless of this.isActive
     let chatBubble = document.querySelector(`.remote-chat-bubble[data-user-id="${data.userId}"]`);
     
     if (!chatBubble) {
@@ -609,6 +699,7 @@ class ChatMode {
       chatBubble.style.opacity = '1';
       chatBubble.style.transition = 'opacity 0.3s ease';
       chatBubble.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)'; // Add shadow for depth
+      chatBubble.style.pointerEvents = 'none'; // Make sure it doesn't block interactions
       
       // Match the remote cursor's color (using border color)
       const photoContainer = remoteCursor.querySelector('.cursor-photo-container');
@@ -645,11 +736,16 @@ class ChatMode {
     chatBubble.textContent = data.message;
     console.log('💬 CHAT TYPING RECEIVE: Set bubble text to message of length:', data.message.length);
     
+    // Make sure it's visible
+    chatBubble.style.display = 'block';
+    chatBubble.style.opacity = '1';
+    
     // Need to wait a tick for the width to update after setting content
     setTimeout(() => {
       // Position below and aligned with left edge of cursor
       chatBubble.style.left = `${rect.left}px`;
       chatBubble.style.top = `${rect.bottom + 15}px`;
+      chatBubble.style.opacity = '1'; // Ensure it's visible
       console.log('💬 CHAT TYPING RECEIVE: Positioned bubble at left:', rect.left, 'top:', rect.bottom + 15);
       
       // Debug final bubble state
@@ -690,7 +786,15 @@ class ChatMode {
    * Handle remote fade events from other users
    */
   handleRemoteFade(data) {
-    console.log('💬 CHAT FADE RECEIVE: Received chat:fade event:', data);
+    console.log('💬 CHAT FADE RECEIVE: Received chat:fade event:', {
+      ...data,
+      isActive: this.isActive
+    });
+    
+    if (!data || !data.userId) {
+      console.error('💬 CHAT FADE RECEIVE ERROR: Invalid or missing data', data);
+      return;
+    }
     
     if (data.userId === this.userId) {
       console.log('💬 CHAT FADE RECEIVE: Ignoring own fade event');
