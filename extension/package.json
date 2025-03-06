@@ -1,0 +1,16 @@
+{
+  "name": "cursor-party",
+  "version": "1.0.0",
+  "description": "Cursor Party - A social cursor experience",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": "18.x"
+  },
+  "dependencies": {
+    "express": "^4.17.1",
+    "socket.io": "^4.4.0"
+  }
+} 

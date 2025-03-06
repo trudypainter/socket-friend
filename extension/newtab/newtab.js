@@ -101,158 +101,23 @@ async function initializeModeSystem() {
   }
 }
 
-// Get user profile photo using Chrome Identity API
+// Get user profile photo from identity API or placeholder
 async function getProfilePhoto() {
-  console.log('📸 PHOTO: Starting getProfilePhoto()');
-  return new Promise((resolve) => {
-    try {
-      console.log('📸 PHOTO: Checking if Chrome Identity API is available:', typeof chrome.identity !== 'undefined' ? '✅ Available' : '❌ Not available');
-      
-      // TEMPORARY FALLBACK: Use a sample avatar if Chrome Identity isn't working
-      // This will help us test if the cursor styling and image display is working correctly
-      const useFallbackAvatar = false; // Set to false to use real Google photos
-
-      if (useFallbackAvatar) {
-        // Use a sample avatar from a public API
-        profilePhotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random&color=fff`;
-        console.log('⚠️ PHOTO: Using fallback avatar URL:', profilePhotoUrl);
-        chrome.storage.local.set({ profilePhotoUrl });
-        resolve();
-        return;
-      }
-
-      console.log('🔐 AUTH: Attempting to get user profile info');
-      if (!chrome.identity) {
-        console.error('❌ AUTH: chrome.identity is not available!');
-        resolve();
-        return;
-      }
-      
-      console.log('🔐 AUTH: Calling chrome.identity.getProfileUserInfo');
-      chrome.identity.getProfileUserInfo({ accountStatus: 'ANY' }, (userInfo) => {
-        console.log('🔐 AUTH: Got user profile info response:', userInfo);
-        if (userInfo?.email) {
-          console.log('✅ AUTH: User is signed in with email:', userInfo.email);
-          
-          // Get profile photo using People API
-          console.log('🔐 AUTH: Requesting auth token (interactive: true)');
-          chrome.identity.getAuthToken({ interactive: true }, (token) => {
-            if (chrome.runtime.lastError) {
-              console.error('❌ AUTH: Error getting auth token:', chrome.runtime.lastError);
-              resolve();
-              return;
-            }
-            
-            console.log('🔑 AUTH: Got auth token:', token ? '✅ Token received' : '❌ No token');
-            console.log('📡 API: Making request to People API');
-            fetch('https://people.googleapis.com/v1/people/me?personFields=photos', {
-              headers: {
-                'Authorization': `Bearer ${token}`
-              }
-            })
-            .then(response => {
-              console.log('📡 API: People API response status:', response.status);
-              return response.json();
-            })
-            .then(data => {
-              console.log('📡 API: People API data:', data);
-              if (data.photos && data.photos.length > 0) {
-                profilePhotoUrl = data.photos[0].url;
-                console.log('✅ PHOTO: Got profile photo URL:', profilePhotoUrl);
-                
-                // Save to storage
-                chrome.storage.local.set({ profilePhotoUrl });
-              } else {
-                console.log('❌ PHOTO: No photos found in profile data');
-                // Use fallback avatar as backup
-                profilePhotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random&color=fff`;
-                console.log('⚠️ PHOTO: Using fallback avatar URL:', profilePhotoUrl);
-                chrome.storage.local.set({ profilePhotoUrl });
-              }
-              resolve();
-            })
-            .catch(error => {
-              console.error('❌ API: Error fetching profile photo:', error);
-              // Use fallback avatar on error
-              profilePhotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random&color=fff`;
-              console.log('⚠️ PHOTO: Using fallback avatar URL after error:', profilePhotoUrl);
-              chrome.storage.local.set({ profilePhotoUrl });
-              resolve();
-            });
-          });
-        } else {
-          console.log('❌ AUTH: User not signed in or no email available');
-          
-          // Try to invoke interactive sign-in
-          console.log('🔄 AUTH: Attempting interactive sign-in directly');
-          chrome.identity.getAuthToken({ interactive: true }, (token) => {
-            if (chrome.runtime.lastError) {
-              console.error('❌ AUTH: Interactive sign-in failed:', chrome.runtime.lastError);
-              // Use fallback avatar when auth fails
-              profilePhotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random&color=fff`;
-              console.log('⚠️ PHOTO: Using fallback avatar due to auth failure:', profilePhotoUrl);
-              chrome.storage.local.set({ profilePhotoUrl });
-              resolve();
-              return;
-            }
-            
-            console.log('✅ AUTH: Interactive sign-in succeeded, token:', token ? 'received' : 'none');
-            if (token) {
-              console.log('📡 API: Making request to People API after interactive sign-in');
-              fetch('https://people.googleapis.com/v1/people/me?personFields=photos', {
-                headers: {
-                  'Authorization': `Bearer ${token}`
-                }
-              })
-              .then(response => {
-                console.log('📡 API: People API response status after interactive sign-in:', response.status);
-                return response.json();
-              })
-              .then(data => {
-                console.log('📡 API: People API data after interactive sign-in:', data);
-                if (data.photos && data.photos.length > 0) {
-                  profilePhotoUrl = data.photos[0].url;
-                  console.log('✅ PHOTO: Got profile photo URL after interactive sign-in:', profilePhotoUrl);
-                  
-                  // Save to storage
-                  chrome.storage.local.set({ profilePhotoUrl });
-                } else {
-                  console.log('❌ PHOTO: No photos found in profile data after interactive sign-in');
-                  // Use fallback avatar
-                  profilePhotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random&color=fff`;
-                  console.log('⚠️ PHOTO: Using fallback avatar after interactive sign-in:', profilePhotoUrl);
-                  chrome.storage.local.set({ profilePhotoUrl });
-                }
-                resolve();
-              })
-              .catch(error => {
-                console.error('❌ API: Error fetching profile photo after interactive sign-in:', error);
-                // Use fallback avatar on error
-                profilePhotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random&color=fff`;
-                console.log('⚠️ PHOTO: Using fallback avatar after interactive sign-in error:', profilePhotoUrl);
-                chrome.storage.local.set({ profilePhotoUrl });
-                resolve();
-              });
-            } else {
-              console.log('❌ AUTH: No token received after interactive sign-in');
-              // Use fallback avatar
-              profilePhotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random&color=fff`;
-              console.log('⚠️ PHOTO: Using fallback avatar due to no token:', profilePhotoUrl);
-              chrome.storage.local.set({ profilePhotoUrl });
-              resolve();
-            }
-          });
-        }
-      });
-    } catch (error) {
-      console.error('❌ PHOTO: Caught exception in getProfilePhoto:', error);
-      // Use fallback avatar on error
-      profilePhotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random&color=fff`;
-      console.log('⚠️ PHOTO: Using fallback avatar after exception:', profilePhotoUrl);
-      chrome.storage.local.set({ profilePhotoUrl });
-      resolve();
+  try {
+    // Use our environment-compatible profile API
+    const photoUrl = await window.env.profile.getPhoto();
+    
+    if (photoUrl) {
+      profilePhotoUrl = photoUrl;
+      // Save to storage
+      window.env.storage.set({ profilePhotoUrl: photoUrl });
     }
-  });
+    
+    return photoUrl;
+  } catch (error) {
+    console.error('Error getting profile photo:', error);
+    return null;
+  }
 }
 
 // Add a simple test function to trigger auth manually
@@ -333,36 +198,36 @@ window.testAuth = () => {
   });
 };
 
+/**
+ * Generate a random username for new users
+ */
+function generateRandomUsername() {
+  return `user_${Math.floor(Math.random() * 10000)}`;
+}
+
 // Load user settings from storage or create default
 async function loadUserSettings() {
   console.log('Loading user settings from storage');
   return new Promise((resolve) => {
-    chrome.storage.local.get(['username', 'cursorColor', 'profilePhotoUrl'], (result) => {
+    // Use our environment-compatible storage API
+    window.env.storage.get(['username', 'cursorColor', 'profilePhotoUrl'], (result) => {
       console.log('Loaded settings from storage:', result);
       
       // Always generate a random color for cursor
       cursorColor = getRandomColor();
       
-      // For username, use stored value or generate
-      if (result.username) {
-        username = result.username;
-      } else {
-        // Create default username if not found
-        username = `user_${Math.floor(Math.random() * 10000)}`;
-        
-        // Save username to storage (only save once)
-        chrome.storage.local.set({ username });
-      }
+      // Use existing values or set defaults
+      username = result.username || generateRandomUsername();
+      profilePhotoUrl = result.profilePhotoUrl || null;
       
-      // For profile photo, use stored value or leave empty
-      profilePhotoUrl = result.profilePhotoUrl || '';
+      // Save preferences
+      window.env.storage.set({
+        username: username,
+        cursorColor: cursorColor,
+        profilePhotoUrl: profilePhotoUrl
+      });
       
-      // Always save the new random color
-      chrome.storage.local.set({ cursorColor });
-      
-      console.log('Using profile photo from storage:', profilePhotoUrl);
-      console.log('Assigned random color:', cursorColor);
-      resolve();
+      resolve({ username, cursorColor, profilePhotoUrl });
     });
   });
 }

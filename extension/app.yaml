@@ -1,0 +1,22 @@
+service: cursor-party
+runtime: nodejs18
+env: standard
+
+handlers:
+  # Serve static files directly
+  - url: /(.*\.(js|css|png|jpg|jpeg|gif|ico|svg|html))$
+    static_files: newtab/\1
+    upload: newtab/.*\.(js|css|png|jpg|jpeg|gif|ico|svg|html)$
+    secure: always
+
+  # Serve socket.io files from lib directory with correct path mapping
+  - url: /lib/(.*)
+    static_files: lib/\1
+    upload: lib/.*
+    secure: always
+
+  # Default handler - serve the newtab.html
+  - url: /.*
+    static_files: newtab/newtab.html
+    upload: newtab/newtab.html
+    secure: always 
