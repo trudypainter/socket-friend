@@ -13,9 +13,9 @@ let username = '';
 let cursorColor = '';
 let profilePhotoUrl = ''; // Add profile photo URL
 // Production URL
-// const serverUrl = 'https://socket-friend-b0t7.onrender.com';
+const serverUrl = 'https://socket-friend-b0t7.onrender.com';
 // For local development: 
-const serverUrl = 'http://localhost:3000';
+// const serverUrl = 'http://localhost:3000';
 const activeUsers = new Map();
 let throttleTimer = null;
 let localCursor = null; // Reference to local cursor element
