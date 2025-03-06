@@ -4,15 +4,15 @@
   "version": "1.0.0",
   "description": "See your friends' cursors in real-time on the new tab page",
   "icons": {
-    "16": "assets/icon.png",
-    "48": "assets/icon.png",
-    "128": "assets/icon.png"
+    "16": "assets/smile.png",
+    "48": "assets/smile.png",
+    "128": "assets/smile.png"
   },
   "action": {
     "default_icon": {
-      "16": "assets/icon.png",
-      "48": "assets/icon.png",
-      "128": "assets/icon.png"
+      "16": "assets/smile.png",
+      "48": "assets/smile.png",
+      "128": "assets/smile.png"
     },
     "default_title": "Socket Friends"
   },
@@ -33,9 +33,19 @@
   ],
   "host_permissions": [
     "http://localhost:3000/*",
-    "https://socket-friend-b0t7.onrender.com/*"
+    "https://socket-friend-b0t7.onrender.com/*",
+    "https://people.googleapis.com/*",
+    "https://www.googleapis.com/*",
+    "https://accounts.google.com/*"
   ],
+  "oauth2": {
+    "client_id": "722930379496-jcl5rghhqa9gck0pjcgefd8uq36evs84.apps.googleusercontent.com",
+    "scopes": [
+      "https://www.googleapis.com/auth/userinfo.profile",
+      "profile"
+    ]
+  },
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; connect-src 'self' ws://localhost:3000 wss://localhost:3000 http://localhost:3000 wss://socket-friend-b0t7.onrender.com https://socket-friend-b0t7.onrender.com;"
+    "extension_pages": "script-src 'self'; connect-src 'self' ws://localhost:3000 wss://localhost:3000 http://localhost:3000 wss://socket-friend-b0t7.onrender.com https://socket-friend-b0t7.onrender.com https://people.googleapis.com https://www.googleapis.com https://accounts.google.com;"
   }
 } 

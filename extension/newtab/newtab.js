@@ -22,85 +22,346 @@ const THROTTLE_DELAY = 50; // ms
 
 // Initialize
 async function init() {
+  console.log('🚀 INIT: Starting application initialization');
+  
   // Load or create user settings
+  console.log('🔄 INIT: Loading user settings');
   await loadUserSettings();
   
   // Get user profile photo
+  console.log('📸 INIT: Attempting to get profile photo');
   await getProfilePhoto();
   
   // Initialize user settings UI
+  console.log('🖌️ INIT: Creating user settings UI');
   createUserSettingsUI();
   
+  // Initialize mode system
+  console.log('🎮 INIT: Initializing mode system');
+  await initializeModeSystem();
+  
   // Connect to WebSocket server
+  console.log('🔌 INIT: Connecting to WebSocket server');
   connectToServer();
   
   // Set up event listeners
+  console.log('👂 INIT: Setting up event listeners');
   setupEventListeners();
+  
+  console.log('✅ INIT: Application initialization complete');
+}
+
+// Initialize mode system
+async function initializeModeSystem() {
+  try {
+    // Import mode manager and modes
+    const modeManagerModule = await import('./utils/modeManager.js');
+    const drawingModeModule = await import('./modes/drawingMode.js');
+    const musicModeModule = await import('./modes/musicMode.js');
+    const combatModeModule = await import('./modes/combatMode.js');
+    const emojiDrawingModeModule = await import('./modes/emojiDrawingMode.js');
+    const swordCombatModeModule = await import('./modes/swordCombatMode.js');
+    const chatModeModule = await import('./modes/chatMode.js');
+    
+    const modeManager = modeManagerModule.default;
+    const drawingMode = drawingModeModule.default;
+    const musicMode = musicModeModule.default;
+    const combatMode = combatModeModule.default;
+    const emojiDrawingMode = emojiDrawingModeModule.default;
+    const swordCombatMode = swordCombatModeModule.default;
+    const chatMode = chatModeModule.default;
+    
+    // Store references globally
+    window.modeManager = modeManager;
+    window.drawingMode = drawingMode;
+    window.musicMode = musicMode;
+    window.combatMode = combatMode;
+    window.emojiDrawingMode = emojiDrawingMode;
+    window.swordCombatMode = swordCombatMode;
+    window.chatMode = chatMode;
+    
+    // Register modes
+    modeManager.registerMode(modeManagerModule.AVAILABLE_MODES.DEFAULT, {
+      activate: () => console.log('Default mode activated'),
+      deactivate: () => console.log('Default mode deactivated')
+    });
+    
+    modeManager.registerMode(modeManagerModule.AVAILABLE_MODES.DRAWING, drawingMode);
+    modeManager.registerMode(modeManagerModule.AVAILABLE_MODES.MUSIC, musicMode);
+    modeManager.registerMode(modeManagerModule.AVAILABLE_MODES.COMBAT, combatMode);
+    modeManager.registerMode(modeManagerModule.AVAILABLE_MODES.EMOJI_DRAWING, emojiDrawingMode);
+    modeManager.registerMode(modeManagerModule.AVAILABLE_MODES.SWORD_COMBAT, swordCombatMode);
+    modeManager.registerMode(modeManagerModule.AVAILABLE_MODES.CHAT, chatMode);
+    
+    console.log('✅ MODE: Mode system initialized successfully');
+    return true;
+  } catch (error) {
+    console.error('❌ MODE: Failed to initialize mode system:', error);
+    return false;
+  }
 }
 
 // Get user profile photo using Chrome Identity API
 async function getProfilePhoto() {
+  console.log('📸 PHOTO: Starting getProfilePhoto()');
   return new Promise((resolve) => {
     try {
-      chrome.identity?.getProfileUserInfo({ accountStatus: 'ANY' }, (userInfo) => {
-        if (userInfo && userInfo.email) {
+      console.log('📸 PHOTO: Checking if Chrome Identity API is available:', typeof chrome.identity !== 'undefined' ? '✅ Available' : '❌ Not available');
+      
+      // TEMPORARY FALLBACK: Use a sample avatar if Chrome Identity isn't working
+      // This will help us test if the cursor styling and image display is working correctly
+      const useFallbackAvatar = false; // Set to false to use real Google photos
+
+      if (useFallbackAvatar) {
+        // Use a sample avatar from a public API
+        profilePhotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random&color=fff`;
+        console.log('⚠️ PHOTO: Using fallback avatar URL:', profilePhotoUrl);
+        chrome.storage.local.set({ profilePhotoUrl });
+        resolve();
+        return;
+      }
+
+      console.log('🔐 AUTH: Attempting to get user profile info');
+      if (!chrome.identity) {
+        console.error('❌ AUTH: chrome.identity is not available!');
+        resolve();
+        return;
+      }
+      
+      console.log('🔐 AUTH: Calling chrome.identity.getProfileUserInfo');
+      chrome.identity.getProfileUserInfo({ accountStatus: 'ANY' }, (userInfo) => {
+        console.log('🔐 AUTH: Got user profile info response:', userInfo);
+        if (userInfo?.email) {
+          console.log('✅ AUTH: User is signed in with email:', userInfo.email);
+          
           // Get profile photo using People API
-          chrome.identity?.getAuthToken({ interactive: true }, (token) => {
+          console.log('🔐 AUTH: Requesting auth token (interactive: true)');
+          chrome.identity.getAuthToken({ interactive: true }, (token) => {
             if (chrome.runtime.lastError) {
-              console.error('Error getting auth token:', chrome.runtime.lastError);
+              console.error('❌ AUTH: Error getting auth token:', chrome.runtime.lastError);
               resolve();
               return;
             }
             
+            console.log('🔑 AUTH: Got auth token:', token ? '✅ Token received' : '❌ No token');
+            console.log('📡 API: Making request to People API');
             fetch('https://people.googleapis.com/v1/people/me?personFields=photos', {
               headers: {
                 'Authorization': `Bearer ${token}`
               }
             })
-            .then(response => response.json())
+            .then(response => {
+              console.log('📡 API: People API response status:', response.status);
+              return response.json();
+            })
             .then(data => {
+              console.log('📡 API: People API data:', data);
               if (data.photos && data.photos.length > 0) {
                 profilePhotoUrl = data.photos[0].url;
-                console.log('Got profile photo:', profilePhotoUrl);
+                console.log('✅ PHOTO: Got profile photo URL:', profilePhotoUrl);
                 
                 // Save to storage
+                chrome.storage.local.set({ profilePhotoUrl });
+              } else {
+                console.log('❌ PHOTO: No photos found in profile data');
+                // Use fallback avatar as backup
+                profilePhotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random&color=fff`;
+                console.log('⚠️ PHOTO: Using fallback avatar URL:', profilePhotoUrl);
                 chrome.storage.local.set({ profilePhotoUrl });
               }
               resolve();
             })
             .catch(error => {
-              console.error('Error fetching profile photo:', error);
+              console.error('❌ API: Error fetching profile photo:', error);
+              // Use fallback avatar on error
+              profilePhotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random&color=fff`;
+              console.log('⚠️ PHOTO: Using fallback avatar URL after error:', profilePhotoUrl);
+              chrome.storage.local.set({ profilePhotoUrl });
               resolve();
             });
           });
         } else {
-          // No user info available
-          resolve();
+          console.log('❌ AUTH: User not signed in or no email available');
+          
+          // Try to invoke interactive sign-in
+          console.log('🔄 AUTH: Attempting interactive sign-in directly');
+          chrome.identity.getAuthToken({ interactive: true }, (token) => {
+            if (chrome.runtime.lastError) {
+              console.error('❌ AUTH: Interactive sign-in failed:', chrome.runtime.lastError);
+              // Use fallback avatar when auth fails
+              profilePhotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random&color=fff`;
+              console.log('⚠️ PHOTO: Using fallback avatar due to auth failure:', profilePhotoUrl);
+              chrome.storage.local.set({ profilePhotoUrl });
+              resolve();
+              return;
+            }
+            
+            console.log('✅ AUTH: Interactive sign-in succeeded, token:', token ? 'received' : 'none');
+            if (token) {
+              console.log('📡 API: Making request to People API after interactive sign-in');
+              fetch('https://people.googleapis.com/v1/people/me?personFields=photos', {
+                headers: {
+                  'Authorization': `Bearer ${token}`
+                }
+              })
+              .then(response => {
+                console.log('📡 API: People API response status after interactive sign-in:', response.status);
+                return response.json();
+              })
+              .then(data => {
+                console.log('📡 API: People API data after interactive sign-in:', data);
+                if (data.photos && data.photos.length > 0) {
+                  profilePhotoUrl = data.photos[0].url;
+                  console.log('✅ PHOTO: Got profile photo URL after interactive sign-in:', profilePhotoUrl);
+                  
+                  // Save to storage
+                  chrome.storage.local.set({ profilePhotoUrl });
+                } else {
+                  console.log('❌ PHOTO: No photos found in profile data after interactive sign-in');
+                  // Use fallback avatar
+                  profilePhotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random&color=fff`;
+                  console.log('⚠️ PHOTO: Using fallback avatar after interactive sign-in:', profilePhotoUrl);
+                  chrome.storage.local.set({ profilePhotoUrl });
+                }
+                resolve();
+              })
+              .catch(error => {
+                console.error('❌ API: Error fetching profile photo after interactive sign-in:', error);
+                // Use fallback avatar on error
+                profilePhotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random&color=fff`;
+                console.log('⚠️ PHOTO: Using fallback avatar after interactive sign-in error:', profilePhotoUrl);
+                chrome.storage.local.set({ profilePhotoUrl });
+                resolve();
+              });
+            } else {
+              console.log('❌ AUTH: No token received after interactive sign-in');
+              // Use fallback avatar
+              profilePhotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random&color=fff`;
+              console.log('⚠️ PHOTO: Using fallback avatar due to no token:', profilePhotoUrl);
+              chrome.storage.local.set({ profilePhotoUrl });
+              resolve();
+            }
+          });
         }
       });
     } catch (error) {
-      console.error('Error getting profile info:', error);
+      console.error('❌ PHOTO: Caught exception in getProfilePhoto:', error);
+      // Use fallback avatar on error
+      profilePhotoUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=random&color=fff`;
+      console.log('⚠️ PHOTO: Using fallback avatar after exception:', profilePhotoUrl);
+      chrome.storage.local.set({ profilePhotoUrl });
       resolve();
     }
   });
 }
 
+// Add a simple test function to trigger auth manually
+// Can be called from the console for testing
+window.testAuth = () => {
+  console.log('🧪 TEST: Manual auth test triggered');
+  const authStatus = document.getElementById('auth-status');
+  if (authStatus) {
+    authStatus.textContent = 'Auth status: Testing...';
+  }
+  
+  chrome.identity.getAuthToken({ interactive: true }, (token) => {
+    console.log('🧪 TEST: Auth result:', token ? '✅ Success' : '❌ Failed');
+    if (chrome.runtime.lastError) {
+      console.error('🧪 TEST: Auth error:', chrome.runtime.lastError);
+      if (authStatus) {
+        authStatus.textContent = `Auth status: ❌ Failed - ${chrome.runtime.lastError.message}`;
+      }
+    } else {
+      console.log('🧪 TEST: Token received (first few chars):', token ? `${token.substring(0, 10)}...` : 'none');
+      if (authStatus) {
+        authStatus.textContent = 'Auth status: ✅ Success';
+      }
+      
+      // Try to get profile photo with this token
+      fetch('https://people.googleapis.com/v1/people/me?personFields=photos', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      .then(response => {
+        console.log('🧪 TEST: People API response status:', response.status);
+        return response.json();
+      })
+      .then(data => {
+        console.log('🧪 TEST: People API data:', data);
+        if (data.photos && data.photos.length > 0) {
+          profilePhotoUrl = data.photos[0].url;
+          console.log('🧪 TEST: Got profile photo URL:', profilePhotoUrl);
+          if (authStatus) {
+            authStatus.textContent = 'Auth status: ✅ Success, Photo found!';
+          }
+          
+          // Save to storage
+          chrome.storage.local.set({ profilePhotoUrl });
+          
+          // Update UI immediately
+          if (localCursor) {
+            const photoElement = localCursor.querySelector('.cursor-photo');
+            if (photoElement) {
+              photoElement.style.backgroundImage = `url(${profilePhotoUrl})`;
+            } else {
+              const newPhotoElement = document.createElement('div');
+              newPhotoElement.className = 'cursor-photo';
+              newPhotoElement.style.backgroundImage = `url(${profilePhotoUrl})`;
+              newPhotoElement.style.backgroundSize = 'cover';
+              newPhotoElement.style.backgroundPosition = 'center';
+              newPhotoElement.style.width = '100%';
+              newPhotoElement.style.height = '100%';
+              newPhotoElement.style.borderRadius = '50%';
+              localCursor.appendChild(newPhotoElement);
+            }
+          }
+        } else {
+          console.log('🧪 TEST: No photos found in profile data');
+          if (authStatus) {
+            authStatus.textContent = 'Auth status: ✅ Success, but no photo found';
+          }
+        }
+      })
+      .catch(error => {
+        console.error('🧪 TEST: Error fetching profile photo:', error);
+        if (authStatus) {
+          authStatus.textContent = 'Auth status: ✅ Auth success, but API error';
+        }
+      });
+    }
+  });
+};
+
 // Load user settings from storage or create default
 async function loadUserSettings() {
+  console.log('Loading user settings from storage');
   return new Promise((resolve) => {
     chrome.storage.local.get(['username', 'cursorColor', 'profilePhotoUrl'], (result) => {
-      if (result.username && result.cursorColor) {
+      console.log('Loaded settings from storage:', result);
+      
+      // Always generate a random color for cursor
+      cursorColor = getRandomColor();
+      
+      // For username, use stored value or generate
+      if (result.username) {
         username = result.username;
-        cursorColor = result.cursorColor;
-        profilePhotoUrl = result.profilePhotoUrl || '';
       } else {
-        // Create default settings if not found
+        // Create default username if not found
         username = `user_${Math.floor(Math.random() * 10000)}`;
-        cursorColor = getRandomColor();
         
-        // Save to storage
-        chrome.storage.local.set({ username, cursorColor });
+        // Save username to storage (only save once)
+        chrome.storage.local.set({ username });
       }
+      
+      // For profile photo, use stored value or leave empty
+      profilePhotoUrl = result.profilePhotoUrl || '';
+      
+      // Always save the new random color
+      chrome.storage.local.set({ cursorColor });
+      
+      console.log('Using profile photo from storage:', profilePhotoUrl);
+      console.log('Assigned random color:', cursorColor);
       resolve();
     });
   });
@@ -108,82 +369,53 @@ async function loadUserSettings() {
 
 // Create user settings UI
 function createUserSettingsUI() {
-  userSettings.innerHTML = `
-    <div class="user-info">
-      <div class="edit-field">
-        <span>Username: <span id="username-display">${username}</span></span>
-        <a href="#" id="edit-username">change</a>
-      </div>
-      <div class="edit-field">
-        <span>Cursor color: <span id="color-display" style="display: inline-block; width: 15px; height: 15px; background-color: ${cursorColor}; border-radius: 50%;"></span></span>
-        <a href="#" id="edit-color">change</a>
-      </div>
-    </div>
-  `;
+  // Create user info container
+  const userInfo = document.createElement('div');
+  userInfo.className = 'user-info';
   
-  // Add event listeners
-  document.getElementById('edit-username').addEventListener('click', editUsername);
-  document.getElementById('edit-color').addEventListener('click', editColor);
+  // Username display (no edit link)
+  const usernameField = document.createElement('div');
+  usernameField.className = 'user-field';
+  
+  const usernameLabel = document.createElement('span');
+  usernameLabel.textContent = 'Username: ';
+  
+  const usernameValue = document.createElement('span');
+  usernameValue.id = 'username-display';
+  usernameValue.textContent = username;
+  
+  usernameField.appendChild(usernameLabel);
+  usernameField.appendChild(usernameValue);
+  
+  // Color display (no edit link)
+  const colorField = document.createElement('div');
+  colorField.className = 'user-field';
+  
+  const colorLabel = document.createElement('span');
+  colorLabel.textContent = 'Cursor color: ';
+  
+  const colorValue = document.createElement('span');
+  colorValue.id = 'color-display';
+  colorValue.style.display = 'inline-block';
+  colorValue.style.width = '16px';
+  colorValue.style.height = '16px';
+  colorValue.style.backgroundColor = cursorColor;
+  colorValue.style.borderRadius = '50%';
+  colorValue.style.marginLeft = '5px';
+  
+  colorField.appendChild(colorLabel);
+  colorField.appendChild(colorValue);
+  
+  // Add fields to user info container
+  userInfo.appendChild(usernameField);
+  userInfo.appendChild(colorField);
+  
+  // Add to DOM
+  userSettings.innerHTML = '';
+  userSettings.appendChild(userInfo);
   
   // Create local cursor element
   createLocalCursor();
-}
-
-// Edit username
-function editUsername(e) {
-  e.preventDefault();
-  
-  const newUsername = prompt('Enter your username:', username);
-  
-  if (newUsername && newUsername.trim() !== '') {
-    username = newUsername.trim();
-    
-    // Update storage
-    chrome.storage.local.set({ username });
-    
-    // Update UI
-    document.getElementById('username-display').textContent = username;
-    
-    // Update local cursor
-    if (localCursor) {
-      const label = localCursor.querySelector('.cursor-label');
-      if (label) {
-        label.textContent = username;
-      }
-    }
-    
-    // Send update to server if connected
-    if (socket && socket.connected) {
-      socket.emit('user:update', { username });
-    }
-  }
-}
-
-// Edit cursor color
-function editColor(e) {
-  e.preventDefault();
-  
-  const newColor = prompt('Enter cursor color (hex code):', cursorColor);
-  
-  if (newColor && /^#[0-9A-F]{6}$/i.test(newColor)) {
-    cursorColor = newColor;
-    
-    // Update storage
-    chrome.storage.local.set({ cursorColor });
-    
-    // Update UI
-    document.getElementById('color-display').style.backgroundColor = cursorColor;
-    
-    // Update local cursor
-    if (localCursor) {
-      localCursor.style.backgroundColor = cursorColor;
-    }
-    
-    // Send update to server if connected
-    if (socket && socket.connected) {
-      socket.emit('user:update', { cursorColor });
-    }
-  }
 }
 
 // Connect to WebSocket server
@@ -217,6 +449,8 @@ function connectToServer() {
 // Handle successful connection
 function handleConnect() {
   console.log('Connected to server');
+  console.log('Sending user join with profilePhotoUrl:', profilePhotoUrl);
+  console.log('Sending user color:', cursorColor);
   
   // Send user info upon connection
   socket?.emit('user:join', {
@@ -224,6 +458,18 @@ function handleConnect() {
     cursorColor: cursorColor,
     profilePhotoUrl: profilePhotoUrl
   });
+  
+  // Initialize mode manager with socket and userId
+  if (window.modeManager && userId) {
+    window.modeManager.init(socket, userId);
+    
+    // Initialize modes
+    if (window.drawingMode) window.drawingMode.init(socket, userId);
+    if (window.musicMode) window.musicMode.init(socket, userId);
+    if (window.combatMode) window.combatMode.init(socket, userId);
+    
+    console.log('✅ MODE: Modes initialized with socket connection');
+  }
 }
 
 // Handle disconnection
@@ -271,15 +517,15 @@ function handleUserJoined(data) {
   console.log('User joined:', data.userId);
   
   // Add to active users
-  activeUsers.set(data.userId, {
-    id: data.userId,
-    username: data.username || `User ${data.userId.substring(0, 5)}`,
+    activeUsers.set(data.userId, {
+      id: data.userId,
+      username: data.username || `User ${data.userId.substring(0, 5)}`,
     color: data.cursorColor || getRandomColor(),
     profilePhotoUrl: data.profilePhotoUrl || ''
-  });
-  
-  // Update UI
-  updateUsersUI();
+    });
+    
+    // Update UI
+    updateUsersUI();
 }
 
 // Handle user left event
@@ -289,11 +535,8 @@ function handleUserLeft(data) {
   // Remove from active users
   activeUsers.delete(data.userId);
   
-  // Remove cursor
-  const cursorElement = document.getElementById(`cursor-${data.userId}`);
-  if (cursorElement) {
-    cursorElement.remove();
-  }
+  // Remove cursor element
+  window.CursorComponent.removeCursor(data.userId);
   
   // Update UI
   updateUsersUI();
@@ -308,27 +551,20 @@ function handleUserUpdated(data) {
   const user = activeUsers.get(data.userId);
   
   if (user) {
-    // Update user data
+  // Update user data
     if (data.username) user.username = data.username;
     if (data.cursorColor) user.color = data.cursorColor;
     if (data.profilePhotoUrl) user.profilePhotoUrl = data.profilePhotoUrl;
     
     // Update cursor element if it exists
-    const cursorElement = document.getElementById(`cursor-${data.userId}`);
-    if (cursorElement) {
-      cursorElement.style.backgroundColor = user.color;
-      
-      // Update profile photo if available
-      const photoElement = cursorElement.querySelector('.cursor-photo');
-      if (photoElement && user.profilePhotoUrl) {
-        photoElement.style.backgroundImage = `url(${user.profilePhotoUrl})`;
-      }
-      
-      // Update label
-      const labelElement = cursorElement.querySelector('.cursor-label');
-      if (labelElement) {
-        labelElement.textContent = user.username;
-      }
+      const cursorElement = document.getElementById(`cursor-${data.userId}`);
+      if (cursorElement) {
+      // Use CursorComponent to update cursor
+      window.CursorComponent.updateCursor(cursorElement, {
+        username: user.username,
+        color: user.color,
+        photoUrl: user.profilePhotoUrl
+      });
     }
     
     // Update UI
@@ -371,38 +607,22 @@ function handleCursorUpdate(data) {
       profilePhotoUrl: ''
     };
     
-    cursorElement = document.createElement('div');
-    cursorElement.id = `cursor-${data.userId}`;
-    cursorElement.className = 'remote-cursor';
-    cursorElement.style.borderColor = user.color;
-    cursorElement.style.borderWidth = '3px';
-    cursorElement.style.borderStyle = 'solid';
-    cursorElement.style.backgroundColor = 'white';
+    console.log(`Creating cursor for user ${data.userId} with photo:`, user.profilePhotoUrl);
     
-    // Add profile photo if available
-    if (user.profilePhotoUrl) {
-      const photoElement = document.createElement('div');
-      photoElement.className = 'cursor-photo';
-      photoElement.style.backgroundImage = `url(${user.profilePhotoUrl})`;
-      photoElement.style.backgroundSize = 'cover';
-      photoElement.style.backgroundPosition = 'center';
-      photoElement.style.width = '100%';
-      photoElement.style.height = '100%';
-      photoElement.style.borderRadius = '50%';
-      cursorElement.appendChild(photoElement);
-    }
+    // Use the CursorComponent to create the cursor
+    cursorElement = window.CursorComponent.createCursor(
+      data.userId,
+      user.username,
+      user.color,
+      user.profilePhotoUrl,
+      false
+    );
     
-    const labelElement = document.createElement('div');
-    labelElement.className = 'cursor-label';
-    labelElement.textContent = user.username;
-    
-    cursorElement.appendChild(labelElement);
     playArea.appendChild(cursorElement);
   }
   
   // Update cursor position
-  cursorElement.style.left = `${data.position.x}px`;
-  cursorElement.style.top = `${data.position.y}px`;
+  window.CursorComponent.updateCursorPosition(cursorElement, data.position.x, data.position.y);
 }
 
 // Handle remote click events
@@ -416,115 +636,130 @@ function handleRemoteClick(data) {
     username: `User ${data.userId.substring(0, 5)}`
   };
   
-  // Create ripple effect with user's color
-  createRippleEffect(data.position.x, data.position.y, user.color);
+  // Create ripple effect with user's color using the CursorComponent
+  window.CursorComponent.createRippleEffect(playArea, data.position.x, data.position.y, user.color);
 }
 
 // Update users list and marquee
 function updateUsersUI() {
-  // Update users list
-  usersList.innerHTML = '';
-  
-  // Update marquee content
-  const marqueeNames = document.createElement('span');
-  marqueeNames.className = 'marquee-text';
-  marqueeNames.textContent = '🌟 PEOPLE HERE: ';
-  
-  for (const [id, user] of activeUsers) {
-    // Add to users list
-    const userElement = document.createElement('div');
-    userElement.className = 'user-item';
-    
-    const cursorElement = document.createElement('div');
-    cursorElement.className = 'user-cursor';
-    cursorElement.style.borderColor = user.color;
-    cursorElement.style.borderWidth = '3px';
-    cursorElement.style.borderStyle = 'solid';
-    cursorElement.style.backgroundColor = 'white';
-    
-    // Add profile photo if available
-    if (user.profilePhotoUrl) {
-      const photoElement = document.createElement('div');
-      photoElement.style.backgroundImage = `url(${user.profilePhotoUrl})`;
-      photoElement.style.backgroundSize = 'cover';
-      photoElement.style.backgroundPosition = 'center';
-      photoElement.style.width = '100%';
-      photoElement.style.height = '100%';
-      photoElement.style.borderRadius = '50%';
-      cursorElement.appendChild(photoElement);
-    }
-    
-    const nameElement = document.createElement('span');
-    nameElement.textContent = id === userId ? `${user.username}` : user.username;
-    
-    userElement.appendChild(cursorElement);
-    userElement.appendChild(nameElement);
-    usersList.appendChild(userElement);
-    
-    // Add to marquee
-    const nameSpan = document.createElement('span');
-    nameSpan.textContent = user.username;
-    nameSpan.className = 'user-name';
-    marqueeNames.appendChild(nameSpan);
-    
-    // Add comma if not last user
-    if (Array.from(activeUsers.keys()).indexOf(id) < activeUsers.size - 1) {
-      marqueeNames.appendChild(document.createTextNode(', '));
-    }
-  }
-  
-  // Replace marquee content
-  marqueeContent.innerHTML = '';
-  marqueeContent.appendChild(marqueeNames);
+  // We no longer need to update the users list or marquee since they're removed
+  // This function is kept for compatibility but doesn't do anything now
+  console.log('Users updated, but UI elements are hidden in Google landing page layout');
 }
 
-// Set up event listeners
+// Setup event listeners
 function setupEventListeners() {
-  // Track mouse movement
-  playArea.addEventListener('mousemove', handleMouseMove);
+  console.log('🔄 SETUP: Setting up event listeners');
   
-  // Track mouse clicks for ripple effect
+  // Play area event listeners
+  playArea.addEventListener('mousemove', handleMouseMove);
   playArea.addEventListener('click', handleMouseClick);
+  
+  // Set up search form handling
+  setupSearchFunctionality();
+  
+  // Create local cursor when mouse enters play area
+  createLocalCursor();
+}
+
+// Set up search form functionality
+function setupSearchFunctionality() {
+  const searchForm = document.getElementById('search-form');
+  const searchInput = searchForm?.querySelector('input[name="q"]');
+  
+  if (searchForm && searchInput) {
+    // Handle form submission
+    searchForm.addEventListener('submit', (e) => {
+      const query = searchInput.value.trim();
+      
+      // If it looks like a URL, navigate directly to it
+      if (isURL(query)) {
+        e.preventDefault();
+        
+        // Add https:// if not present
+        let url = query;
+        if (!url.startsWith('http://') && !url.startsWith('https://')) {
+          url = `https://${url}`;
+        }
+        
+        // Navigate to the URL
+        window.location.href = url;
+      }
+      // Otherwise, let the form submit to Google search
+    });
+    
+    // Add voice search functionality
+    const voiceSearch = document.querySelector('.voice-search');
+    if (voiceSearch) {
+      voiceSearch.addEventListener('click', (e) => {
+        e.preventDefault();
+        
+        // Check if SpeechRecognition is available
+        if ('webkitSpeechRecognition' in window) {
+          const recognition = new webkitSpeechRecognition();
+          recognition.continuous = false;
+          recognition.interimResults = false;
+          
+          recognition.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            searchInput.value = transcript;
+            searchForm.submit();
+          };
+          
+          recognition.start();
+        } else {
+          alert('Voice search is not supported in your browser.');
+        }
+      });
+    }
+  }
+}
+
+// Check if a string appears to be a URL
+function isURL(str) {
+  // Simple URL pattern check
+  const pattern = /^(https?:\/\/)?(www\.)?[-a-zA-Z0-9@:%._\+~#=]{2,256}\.[a-z]{2,6}\b([-a-zA-Z0-9@:%_\+.~#?&//=]*)$/i;
+  return pattern.test(str);
 }
 
 // Handle mouse movement and send position to server
 function handleMouseMove(e) {
-  if (!socket || !socket.connected || !userId) return;
+  // Store the mouse position globally for access by other components
+  window.mouseX = e.clientX;
+  window.mouseY = e.clientY;
   
-  // Get mouse position relative to play area
+  // Get position relative to play area
   const rect = playArea.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
   
-  // Update local cursor position
+  // Update local cursor position if exists
   if (localCursor) {
-    localCursor.style.left = `${x}px`;
-    localCursor.style.top = `${y}px`;
+    window.CursorComponent.updateCursorPosition(localCursor, x, y);
   }
   
-  // Throttle updates to avoid flooding the server
-  if (!throttleTimer) {
+  // Throttle emit to avoid excessive events
+  if (!throttleTimer && socket?.connected && userId) {
     throttleTimer = setTimeout(() => {
-      throttleTimer = null;
-      
-      // Send cursor position to server
       socket.emit('cursor:move', {
         position: { x, y },
         timestamp: Date.now()
       });
+      
+      throttleTimer = null;
     }, THROTTLE_DELAY);
   }
 }
 
 // Handle mouse clicks and create ripple effect
 function handleMouseClick(e) {
-  // Create ripple effect
-  createRippleEffect(e.clientX, e.clientY, cursorColor);
-  
   // Get position relative to play area
   const rect = playArea.getBoundingClientRect();
   const x = e.clientX - rect.left;
   const y = e.clientY - rect.top;
+  
+  // Create ripple effect at the cursor position using CursorComponent
+  window.CursorComponent.createRippleEffect(playArea, x, y, cursorColor);
   
   // Send ripple event to server
   if (socket?.connected && userId) {
@@ -535,52 +770,25 @@ function handleMouseClick(e) {
   }
 }
 
-// Create ripple effect at specified position
-function createRippleEffect(x, y, color) {
-  // Create ripple element
-  const ripple = document.createElement('div');
-  ripple.className = 'ripple';
-  ripple.style.left = `${x}px`;
-  ripple.style.top = `${y}px`;
-  ripple.style.backgroundColor = color;
-  
-  // Add to play area
-  playArea.appendChild(ripple);
-  
-  // Remove after animation completes
-  setTimeout(() => {
-    ripple.remove();
-  }, 1000);
-}
-
 // Generate a random color
 function getRandomColor() {
   return `#${Math.floor(Math.random() * 16777215).toString(16).padStart(6, '0')}`;
 }
 
-// Create local cursor element
+// Create local cursor
 function createLocalCursor() {
   if (localCursor) return;
   
-  localCursor = document.createElement('div');
-  localCursor.className = 'local-cursor';
-  localCursor.style.borderColor = cursorColor;
-  localCursor.style.borderWidth = '3px';
-  localCursor.style.borderStyle = 'solid';
-  localCursor.style.backgroundColor = 'white';
+  console.log('Creating local cursor with photo URL:', profilePhotoUrl);
   
-  // Add profile photo if available
-  if (profilePhotoUrl) {
-    const photoElement = document.createElement('div');
-    photoElement.className = 'cursor-photo';
-    photoElement.style.backgroundImage = `url(${profilePhotoUrl})`;
-    photoElement.style.backgroundSize = 'cover';
-    photoElement.style.backgroundPosition = 'center';
-    photoElement.style.width = '100%';
-    photoElement.style.height = '100%';
-    photoElement.style.borderRadius = '50%';
-    localCursor.appendChild(photoElement);
-  }
+  // Use CursorComponent to create local cursor
+  localCursor = window.CursorComponent.createCursor(
+    'local',
+    username,
+    cursorColor,
+    profilePhotoUrl,
+    true
+  );
   
   playArea.appendChild(localCursor);
 }

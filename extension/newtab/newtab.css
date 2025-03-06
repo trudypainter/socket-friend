@@ -1,10 +1,11 @@
-/* Socket Friends - New Tab Page Styles */
+/* Socket Friends - Google-Style New Tab Page */
 
 :root {
   --bg-color: #ffffff;
-  --text-color: #000000;
-  --border-color: #cccccc;
-  --panel-bg: #f8f8f8;
+  --text-color: #202124;
+  --border-color: #dfe1e5;
+  --hover-border-color: #d1d1d1;
+  --shadow-color: rgba(0, 0, 0, 0.1);
 }
 
 * {
@@ -21,172 +22,111 @@ body {
   overflow: hidden;
 }
 
-.container {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-}
-
-/* Marquee styles */
-.marquee {
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border-color);
-  overflow: hidden;
-  white-space: nowrap;
-  background-color: var(--bg-color);
-}
-
-.marquee-content {
-  display: inline-block;
-  animation: marquee 15s linear infinite;
-}
-
-@keyframes marquee {
-  0% { transform: translateX(100vw); }
-  100% { transform: translateX(-100%); }
-}
-
-.marquee-text {
-  font-weight: bold;
-}
-
-.user-name {
-  margin: 0 4px;
-}
-
-/* Main content area */
-.main-content {
-  display: flex;
-  flex: 1;
-  height: calc(100vh - 37px); /* Account for marquee height */
-}
-
-/* Play area */
+/* Play area (full page) */
 .play-area {
-  flex: 1;
+  width: 100vw;
+  height: 100vh;
   position: relative;
   background-color: var(--bg-color);
   cursor: none; /* Hide default cursor */
   overflow: hidden;
 }
 
-/* Side panel */
-.side-panel {
-  width: 250px;
-  border-left: 1px solid var(--border-color);
-  display: flex;
-  flex-direction: column;
-  padding: 16px;
-  background-color: var(--panel-bg);
-}
-
-.side-panel h3 {
-  margin-bottom: 20px;
-}
-
-/* Users list */
-.users-list {
-  flex: 1;
-  overflow-y: auto;
-}
-
-.user-item {
-  display: flex;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.user-cursor {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  margin-right: 10px;
-  overflow: hidden;
-  border: 3px solid;
-  background-color: white;
-}
-
-/* User settings */
-.user-settings {
-  border-top: 1px solid var(--border-color);
-  padding-top: 16px;
-  margin-top: auto;
-}
-
-.user-info {
-  display: flex;
-  flex-direction: column;
-}
-
-.edit-field {
-  display: flex;
-  margin-bottom: 8px;
-}
-
-.edit-field a {
-  text-decoration: none;
-  color: #666;
-  margin-left: 8px;
-}
-
-/* Cursor styles */
-.remote-cursor, .local-cursor {
+/* Google landing page styles */
+.google-landing {
   position: absolute;
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
-  z-index: 10;
-  transition: transform 0.1s ease-out;
-  overflow: hidden;
-  border: 3px solid;
-  background-color: white;
-}
-
-.local-cursor {
-  pointer-events: none; /* Prevent cursor from interfering with clicks */
-}
-
-.cursor-photo {
+  top: 0;
+  left: 0;
   width: 100%;
   height: 100%;
-  border-radius: 50%;
-  background-size: cover;
-  background-position: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding-bottom: 100px; /* Adjust to move content up a bit */
+  z-index: 1; /* Below cursors */
+  pointer-events: auto; /* Allow interaction with search elements */
 }
 
-.cursor-label {
-  position: absolute;
-  bottom: -20px;
-  left: 50%;
-  transform: translateX(-50%);
-  white-space: nowrap;
-  text-align: center;
-  font-size: 12px;
-  color: #333;
-  text-shadow: 0px 0px 2px rgba(255, 255, 255, 0.8);
+/* Google logo */
+.google-logo {
+  margin-bottom: 30px;
+  pointer-events: none; /* Prevent logo from interfering with cursor */
 }
 
-/* Ripple effect */
-.ripple {
+.google-logo img {
+  height: 92px;
+  width: 272px;
+}
+
+/* Search container */
+.search-container {
+  width: 100%;
+  max-width: 584px;
+  margin: 0 auto;
+  pointer-events: auto; /* Ensure search elements are interactive */
+}
+
+/* Search form */
+#search-form {
+  width: 100%;
+}
+
+/* Search bar */
+.search-bar {
+  display: flex;
+  align-items: center;
+  height: 46px;
+  border: 1px solid var(--border-color);
+  border-radius: 24px;
+  padding: 0 15px;
+  box-shadow: 0 1px 6px var(--shadow-color);
+  background-color: white;
+}
+
+.search-bar:hover {
+  box-shadow: 0 1px 10px var(--shadow-color);
+  border-color: var(--hover-border-color);
+}
+
+/* Search icons */
+.search-icon, .voice-search, .settings-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  width: 24px;
+  margin: 0 10px;
+}
+
+.search-icon svg, .settings-icon svg {
+  fill: #9aa0a6;
+  height: 20px;
+  width: 20px;
+}
+
+/* Search input */
+.search-bar input {
+  flex: 1;
+  height: 100%;
+  border: none;
+  outline: none;
+  font-size: 16px;
+  color: var(--text-color);
+  background-color: transparent;
+}
+
+/* Voice search icon */
+.voice-search svg {
+  height: 24px;
+  width: 24px;
+}
+
+/* User settings - hidden but needed for functionality */
+.user-settings {
   position: absolute;
-  border-radius: 50%;
-  transform: translate(-50%, -50%);
+  bottom: 0;
+  right: 0;
+  opacity: 0;
   pointer-events: none;
-  animation: rippleEffect 1s ease-out forwards;
-  opacity: 0.7;
-  z-index: 5;
-}
-
-@keyframes rippleEffect {
-  0% {
-    width: 0;
-    height: 0;
-    opacity: 0.7;
-  }
-  100% {
-    width: 200px;
-    height: 200px;
-    opacity: 0;
-  }
 } 

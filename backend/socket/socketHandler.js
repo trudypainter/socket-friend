@@ -26,6 +26,7 @@ module.exports = (io) => {
         username: userData.username || `User ${userId.substring(0, 5)}`,
         cursorColor: userData.cursorColor || '#000000',
         profilePhotoUrl: userData.profilePhotoUrl || '',
+        currentMode: 'default',
         connectedAt: new Date()
       });
       
@@ -76,6 +77,26 @@ module.exports = (io) => {
       }
     });
     
+    // Handle mode changes
+    socket.on('mode:change', (data) => {
+      const user = activeUsers.get(userId);
+      
+      if (user) {
+        // Update user's current mode
+        user.currentMode = data.mode;
+        activeUsers.set(userId, user);
+        
+        // Broadcast mode change to others
+        socket.to(GLOBAL_ROOM).emit('mode:change', {
+          userId,
+          mode: data.mode,
+          timestamp: data.timestamp
+        });
+        
+        console.log(`User ${userId} changed mode to ${data.mode}`);
+      }
+    });
+    
     // Handle cursor movement
     socket.on('cursor:move', (data) => {
       // Add user ID to the data
@@ -98,6 +119,102 @@ module.exports = (io) => {
       
       // Broadcast to others in the room
       socket.to(GLOBAL_ROOM).emit('cursor:click', clickData);
+    });
+    
+    // Handle drawing mode events
+    socket.on('drawing:stroke', (data) => {
+      // Add user ID to the data
+      const strokeData = {
+        ...data,
+        userId
+      };
+      
+      // Broadcast to others in the room
+      socket.to(GLOBAL_ROOM).emit('drawing:stroke', strokeData);
+    });
+    
+    // Handle music mode events
+    socket.on('music:note', (data) => {
+      // Add user ID to the data
+      const noteData = {
+        ...data,
+        userId
+      };
+      
+      // Broadcast to others in the room
+      socket.to(GLOBAL_ROOM).emit('music:note', noteData);
+    });
+    
+    // Handle combat mode events
+    socket.on('combat:attack', (data) => {
+      // Add user ID to the data
+      const attackData = {
+        ...data,
+        userId
+      };
+      
+      // Broadcast to others in the room
+      socket.to(GLOBAL_ROOM).emit('combat:attack', attackData);
+    });
+    
+    // Handle emoji drawing events
+    socket.on('emoji:draw', (data) => {
+      // Add user ID to the data
+      const emojiData = {
+        ...data,
+        userId
+      };
+      
+      // Broadcast to others in the room
+      socket.to(GLOBAL_ROOM).emit('emoji:draw', emojiData);
+    });
+    
+    // Handle sword combat attack events
+    socket.on('sword:attack', (data) => {
+      // Add user ID to the data
+      const attackData = {
+        ...data,
+        userId
+      };
+      
+      // Broadcast to others in the room
+      socket.to(GLOBAL_ROOM).emit('sword:attack', attackData);
+    });
+    
+    // Handle sword combat hit events
+    socket.on('sword:hit', (data) => {
+      const hitData = {
+        ...data,
+        attackerId: userId
+      };
+      socket.to(GLOBAL_ROOM).emit('sword:hit', hitData);
+    });
+    
+    // Handle chat typing events
+    socket.on('chat:typing', (data) => {
+      const typingData = {
+        ...data,
+        userId
+      };
+      socket.to(GLOBAL_ROOM).emit('chat:typing', typingData);
+    });
+    
+    // Handle chat message events
+    socket.on('chat:message', (data) => {
+      const messageData = {
+        ...data,
+        userId
+      };
+      socket.to(GLOBAL_ROOM).emit('chat:message', messageData);
+    });
+    
+    // Handle chat fade events
+    socket.on('chat:fade', (data) => {
+      const fadeData = {
+        ...data,
+        userId
+      };
+      socket.to(GLOBAL_ROOM).emit('chat:fade', fadeData);
     });
     
     // Handle disconnection
