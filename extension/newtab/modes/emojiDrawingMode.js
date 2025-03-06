@@ -27,11 +27,20 @@ class EmojiDrawingMode {
    * @param {string} userId - Current user ID
    */
   init(socket, userId) {
+    console.log('🎭 EMOJI INIT: Initializing emoji drawing mode', { socketExists: !!socket, socketId: socket?.id });
+    
+    // Store socket reference
     this.socket = socket;
     this.userId = userId;
     
-    // We no longer need to listen for remote emoji events here
-    // as they are now handled globally in newtab.js
+    // Add debug info
+    if (!socket) {
+      console.error('🎭 EMOJI INIT ERROR: Socket is null or undefined');
+    } else if (!socket.connected) {
+      console.warn('🎭 EMOJI INIT WARNING: Socket exists but is not connected');
+    } else {
+      console.log('🎭 EMOJI INIT: Socket is properly connected with ID:', socket.id);
+    }
     
     // Try to determine emoji size from cursor element
     const localCursor = document.getElementById('local-cursor');
@@ -44,7 +53,7 @@ class EmojiDrawingMode {
       }
     }
     
-    console.log('🔣 EMOJI: Emoji drawing mode initialized with size', this.emojiSize);
+    console.log('🎭 EMOJI INIT: Emoji drawing mode initialized with size', this.emojiSize);
   }
   
   /**
@@ -141,8 +150,11 @@ class EmojiDrawingMode {
     // Create the emoji element
     this.createEmojiElement(x, y, emoji);
     
+    // Get the global socket if this.socket is not available or not connected
+    const socket = this.socket?.connected ? this.socket : window.socket;
+    
     // Emit event to server with userId
-    if (this.socket?.connected) {
+    if (socket?.connected) {
       const emojiData = {
         userId: this.userId,
         position: { x, y },
@@ -151,13 +163,24 @@ class EmojiDrawingMode {
         timestamp: Date.now()
       };
       
-      console.log(`🚀 EMOJI EMIT: Sending emoji:draw to server:`, emojiData);
-      this.socket.emit('emoji:draw', emojiData);
+      console.log('🚀 EMOJI EMIT: Sending emoji:draw to server:', emojiData);
+      socket.emit('emoji:draw', emojiData);
       
       // Debug socket state
-      console.log(`🔌 SOCKET STATE: Connected=${this.socket.connected}, ID=${this.socket.id}`);
+      console.log('🔌 SOCKET STATE:', {
+        connected: true,
+        id: socket.id
+      });
     } else {
-      console.warn(`⚠️ EMOJI EMIT FAILED: Socket not connected or unavailable`);
+      console.warn('⚠️ EMOJI EMIT FAILED: Socket not connected or unavailable');
+      console.log('🔍 EMOJI DEBUG: Local socket state:', {
+        socketExists: !!this.socket,
+        localSocketConnected: this.socket?.connected,
+        localSocketId: this.socket?.id,
+        globalSocketExists: !!window.socket,
+        globalSocketConnected: window.socket?.connected,
+        globalSocketId: window.socket?.id
+      });
     }
     
     // Emit event locally
@@ -169,7 +192,7 @@ class EmojiDrawingMode {
       timestamp: Date.now()
     };
     
-    console.log(`📢 EMOJI LOCAL: Emitting local emoji:draw event:`, localEventData);
+    console.log('📢 EMOJI LOCAL: Emitting local emoji:draw event:', localEventData);
     eventBus.emit('emoji:draw', localEventData);
   }
   

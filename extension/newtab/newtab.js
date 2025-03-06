@@ -48,6 +48,9 @@ async function init() {
   console.log('👂 INIT: Setting up event listeners');
   setupEventListeners();
   
+  // Debug emoji rendering to check for issues
+  debugEmojiRendering();
+  
   console.log('✅ INIT: Application initialization complete');
 }
 
@@ -419,6 +422,10 @@ function handleConnect() {
   console.log('📸 CONNECTED: User profile photo URL:', profilePhotoUrl);
   console.log('🎨 CONNECTED: User cursor color:', cursorColor);
   
+  // Make socket available globally for use by other modules
+  window.socket = socket;
+  console.log('🌐 CONNECTED: Socket made available globally as window.socket');
+  
   // Send user info upon connection
   socket?.emit('user:join', {
     username: username,
@@ -479,7 +486,13 @@ function handleConnect() {
 
 // Handle disconnection
 function handleDisconnect() {
-  console.log('Disconnected from server');
+  console.log('🔴 DISCONNECTED: Lost connection to server');
+  
+  // Update global socket state
+  if (window.socket === socket) {
+    console.log('🌐 DISCONNECTED: Clearing global socket reference');
+    window.socket = null;
+  }
   
   // Remove all remote cursors
   const cursors = document.querySelectorAll('.remote-cursor');
@@ -487,12 +500,17 @@ function handleDisconnect() {
     cursor.remove();
   }
   
-  // Clear users list
+  // Clear active users
   activeUsers.clear();
+  
+  // Update user interface
   updateUsersUI();
   
-  // Try to reconnect after a delay
-  setTimeout(connectToServer, 3000);
+  // Show disconnection message in the search bar to inform user
+  const searchInput = document.querySelector('.search-bar input');
+  if (searchInput) {
+    searchInput.placeholder = '⚠️ Disconnected from server. Reconnecting...';
+  }
 }
 
 // Handle connection error
@@ -803,25 +821,33 @@ function createLocalCursor() {
  * @param {Object} data - Emoji drawing data
  */
 function handleRemoteEmojiDraw(data) {
-  console.log(`📥 EMOJI RECEIVE: Received emoji:draw from server:`, data);
+  console.log('📥 EMOJI RECEIVE: Received emoji:draw from server:', data);
   
   // Check data integrity
   if (!data || !data.position || !data.emoji) {
-    console.error(`❌ EMOJI RECEIVE ERROR: Invalid emoji data received:`, data);
+    console.error('❌ EMOJI RECEIVE ERROR: Invalid emoji data received:', data);
     return;
   }
   
   // Skip if this is our own emoji (already handled locally)
   if (data.userId === userId) {
-    console.log(`🔄 EMOJI RECEIVE: Skipping own emoji drawing`);
+    console.log('🔄 EMOJI RECEIVE: Skipping own emoji drawing');
     return;
   }
   
   const userInfo = activeUsers.get(data.userId);
-  console.log(`👤 EMOJI USER: Drawing from user ${data.userId}`, userInfo ? userInfo.username : 'Unknown user');
+  console.log('👤 EMOJI USER:', {
+    userId: data.userId,
+    username: userInfo ? userInfo.username : 'Unknown user'
+  });
   
   // Create emoji element
-  console.log(`🎨 EMOJI DRAWING: Creating emoji at position (${data.position.x}, ${data.position.y})`);
+  console.log('🎨 EMOJI DRAWING:', {
+    x: data.position.x,
+    y: data.position.y,
+    emoji: data.emoji,
+    size: data.size
+  });
   createEmojiElement(data.position.x, data.position.y, data.emoji, data.size, data.userId);
 }
 
@@ -894,6 +920,73 @@ function createEmojiElement(x, y, emoji, size = 40, remoteUserId = null) {
       console.log('🗑️ EMOJI CLEANUP: Emoji element removed from DOM');
     }, 1000);
   }, fadeTimeout);
+}
+
+/**
+ * Debug function to help diagnose emoji rendering issues
+ */
+function debugEmojiRendering() {
+  console.log('🔍 EMOJI DEBUG: Starting emoji rendering diagnostics');
+  
+  // Check if play area exists
+  const playArea = document.getElementById('play-area');
+  console.log('🔍 EMOJI DEBUG: Play area exists:', !!playArea);
+  
+  if (playArea) {
+    // Check play area dimensions and visibility
+    const playAreaRect = playArea.getBoundingClientRect();
+    console.log('🔍 EMOJI DEBUG: Play area dimensions:', {
+      width: playAreaRect.width,
+      height: playAreaRect.height,
+      top: playAreaRect.top,
+      left: playAreaRect.left,
+      visible: playAreaRect.width > 0 && playAreaRect.height > 0
+    });
+    
+    // CSS properties that might affect visibility
+    const playAreaStyle = window.getComputedStyle(playArea);
+    console.log('🔍 EMOJI DEBUG: Play area styles:', {
+      display: playAreaStyle.display,
+      visibility: playAreaStyle.visibility,
+      opacity: playAreaStyle.opacity,
+      zIndex: playAreaStyle.zIndex,
+      position: playAreaStyle.position
+    });
+  }
+  
+  // Check event bus for emoji:draw listeners
+  if (window.EventBus) {
+    const emojiListeners = window.EventBus.listeners?.['emoji:draw'] || [];
+    console.log('🔍 EMOJI DEBUG: Number of emoji:draw event listeners:', emojiListeners.length);
+  }
+  
+  // Check socket connection
+  console.log('🔍 EMOJI DEBUG: Socket connection state:', {
+    socketExists: !!socket,
+    connected: socket?.connected,
+    id: socket?.id
+  });
+  
+  // Monitor emoji:draw events
+  if (socket) {
+    const originalOn = socket.on.bind(socket);
+    socket.on = (event, callback) => {
+      if (event === 'emoji:draw') {
+        const wrappedCallback = (data) => {
+          console.log('🔍 EMOJI DEBUG: Socket received emoji:draw event:', data);
+          return callback(data);
+        };
+        return originalOn(event, wrappedCallback);
+      }
+      return originalOn(event, callback);
+    };
+    
+    // Listen again for emoji:draw events with our wrapped listener
+    socket.on('emoji:draw', handleRemoteEmojiDraw);
+    console.log('🔍 EMOJI DEBUG: Added monitoring for emoji:draw socket events');
+  }
+  
+  console.log('🔍 EMOJI DEBUG: Emoji rendering diagnostics complete');
 }
 
 // Initialize when DOM is loaded

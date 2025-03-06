@@ -19,6 +19,12 @@ module.exports = (io) => {
     
     // User joins (with username and cursor color)
     socket.on('user:join', (userData) => {
+      console.log(`👤 SERVER USER JOIN: User joining with socket ID ${socket.id}`, {
+        username: userData.username,
+        hasProfilePhoto: !!userData.profilePhotoUrl,
+        timestamp: new Date().toISOString()
+      });
+      
       // Store user data
       activeUsers.set(userId, {
         id: userId,
@@ -30,14 +36,31 @@ module.exports = (io) => {
         connectedAt: new Date()
       });
       
+      console.log(`👤 SERVER USER JOIN: Added user ${userId} to active users map, total users:`, activeUsers.size);
+      
       // Join the global room
       socket.join(GLOBAL_ROOM);
+      console.log(`👤 SERVER USER JOIN: User ${userId} joined room ${GLOBAL_ROOM}`);
+      
+      // Debug room membership
+      const roomMembers = io.sockets.adapter.rooms.get(GLOBAL_ROOM);
+      const memberCount = roomMembers ? roomMembers.size : 0;
+      console.log(`👤 SERVER ROOM: Room ${GLOBAL_ROOM} now has ${memberCount} members`);
+      
+      // Log all users in the room
+      const roomUsers = Array.from(roomMembers || []).map(socketId => {
+        const user = Array.from(activeUsers.values()).find(u => u.socketId === socketId);
+        return user ? `${user.username} (${socketId})` : socketId;
+      });
+      console.log(`👤 SERVER ROOM: Users in ${GLOBAL_ROOM}:`, roomUsers);
       
       // Inform the new user about their ID
       socket.emit('user:connected', { userId });
+      console.log(`👤 SERVER USER JOIN: Sent user:connected event to user ${userId}`);
       
       // Send all active users to the new user
       socket.emit('users:all', Array.from(activeUsers.values()));
+      console.log(`👤 SERVER USER JOIN: Sent users:all event to user ${userId} with ${activeUsers.size} users`);
       
       // Inform others about the new user
       socket.to(GLOBAL_ROOM).emit('user:joined', {
@@ -46,6 +69,7 @@ module.exports = (io) => {
         cursorColor: userData.cursorColor,
         profilePhotoUrl: userData.profilePhotoUrl
       });
+      console.log(`👤 SERVER USER JOIN: Broadcast user:joined event for user ${userId} to room ${GLOBAL_ROOM}`);
     });
     
     // Handle user updates (name, color)
@@ -159,7 +183,7 @@ module.exports = (io) => {
     
     // Handle emoji drawing events
     socket.on('emoji:draw', (data) => {
-      console.log(`🎯 SERVER EMOJI RECEIVED: User ${userId} sent emoji:draw event:`, {
+      console.log('🎯 SERVER EMOJI RECEIVED: User', userId, 'sent emoji:draw event:', {
         emoji: data.emoji,
         position: data.position,
         timestamp: data.timestamp
@@ -173,17 +197,21 @@ module.exports = (io) => {
       
       // Check for required fields
       if (!emojiData.position || !emojiData.emoji) {
-        console.error(`❌ SERVER EMOJI ERROR: Invalid emoji data received:`, emojiData);
+        console.error('❌ SERVER EMOJI ERROR: Invalid emoji data received:', emojiData);
         return;
       }
       
       // Log active connections
       const roomSize = io.sockets.adapter.rooms.get(GLOBAL_ROOM)?.size || 0;
-      console.log(`📊 SERVER STATS: Emitting to ${roomSize - 1} other users in ${GLOBAL_ROOM}`);
+      console.log('📊 SERVER STATS: Emitting to', roomSize - 1, 'other users in', GLOBAL_ROOM);
       
-      // Broadcast to others in the room
-      socket.to(GLOBAL_ROOM).emit('emoji:draw', emojiData);
-      console.log(`📢 SERVER EMOJI BROADCAST: Sent emoji:draw to room ${GLOBAL_ROOM}`);
+      try {
+        // Broadcast to others in the room
+        socket.to(GLOBAL_ROOM).emit('emoji:draw', emojiData);
+        console.log('📢 SERVER EMOJI BROADCAST: Successfully sent emoji:draw to room', GLOBAL_ROOM);
+      } catch (error) {
+        console.error('❌ SERVER EMOJI BROADCAST ERROR:', error);
+      }
     });
     
     // Handle sword combat attack events
@@ -209,40 +237,141 @@ module.exports = (io) => {
     
     // Handle chat typing events
     socket.on('chat:typing', (data) => {
+      console.log(`💬 SERVER CHAT TYPING: Received from user ${userId}`, {
+        socketId: socket.id,
+        messageLength: data.message?.length || 0,
+        timestamp: new Date().toISOString()
+      });
+
+      // Validate data
+      if (!data.message) {
+        console.warn(`💬 SERVER CHAT TYPING: Missing message in typing event from user ${userId}`);
+      }
+
+      // Add userId if not present
       const typingData = {
         ...data,
-        userId
+        userId: data.userId || userId // Use provided userId or socket userId
       };
-      socket.to(GLOBAL_ROOM).emit('chat:typing', typingData);
+      
+      // Check room membership
+      const roomMembers = io.sockets.adapter.rooms.get(GLOBAL_ROOM);
+      const memberCount = roomMembers ? roomMembers.size : 0;
+      console.log(`💬 SERVER CHAT TYPING: Broadcasting to ${memberCount - 1} other users in ${GLOBAL_ROOM}`);
+      
+      try {
+        // Broadcast to others in the room
+        socket.to(GLOBAL_ROOM).emit('chat:typing', typingData);
+        console.log(`💬 SERVER CHAT TYPING: Successfully broadcast typing event to room ${GLOBAL_ROOM}`);
+      } catch (error) {
+        console.error(`💬 SERVER CHAT TYPING ERROR: Failed to broadcast typing event:`, error);
+      }
     });
     
     // Handle chat message events
     socket.on('chat:message', (data) => {
+      console.log(`💬 SERVER CHAT MESSAGE: Received from user ${userId}`, {
+        socketId: socket.id,
+        message: data.message,
+        timestamp: new Date().toISOString()
+      });
+
+      // Validate data
+      if (!data.message) {
+        console.warn(`💬 SERVER CHAT MESSAGE: Empty message received from user ${userId}`);
+      }
+
+      // Add userId if not present
       const messageData = {
         ...data,
-        userId
+        userId: data.userId || userId // Use provided userId or socket userId
       };
-      socket.to(GLOBAL_ROOM).emit('chat:message', messageData);
+      
+      // Check room membership
+      const roomMembers = io.sockets.adapter.rooms.get(GLOBAL_ROOM);
+      const memberCount = roomMembers ? roomMembers.size : 0;
+      console.log(`💬 SERVER CHAT MESSAGE: Broadcasting to ${memberCount - 1} other users in ${GLOBAL_ROOM}`);
+      
+      // Log active users
+      console.log(`💬 SERVER CHAT MESSAGE: Active users in room:`, 
+        Array.from(roomMembers || []).map(socketId => {
+          const user = Array.from(activeUsers.values()).find(u => u.socketId === socketId);
+          return user ? `${user.username} (${socketId})` : socketId;
+        })
+      );
+      
+      try {
+        // Broadcast to others in the room
+        socket.to(GLOBAL_ROOM).emit('chat:message', messageData);
+        console.log(`💬 SERVER CHAT MESSAGE: Successfully broadcast message to room ${GLOBAL_ROOM}`);
+      } catch (error) {
+        console.error(`💬 SERVER CHAT MESSAGE ERROR: Failed to broadcast message:`, error);
+      }
     });
     
     // Handle chat fade events
     socket.on('chat:fade', (data) => {
+      console.log(`💬 SERVER CHAT FADE: Received from user ${userId}`, {
+        socketId: socket.id,
+        timestamp: new Date().toISOString()
+      });
+
+      // Add userId if not present
       const fadeData = {
         ...data,
-        userId
+        userId: data.userId || userId // Use provided userId or socket userId
       };
-      socket.to(GLOBAL_ROOM).emit('chat:fade', fadeData);
+      
+      // Check room membership
+      const roomMembers = io.sockets.adapter.rooms.get(GLOBAL_ROOM);
+      const memberCount = roomMembers ? roomMembers.size : 0;
+      console.log(`💬 SERVER CHAT FADE: Broadcasting to ${memberCount - 1} other users in ${GLOBAL_ROOM}`);
+      
+      try {
+        // Broadcast to others in the room
+        socket.to(GLOBAL_ROOM).emit('chat:fade', fadeData);
+        console.log(`💬 SERVER CHAT FADE: Successfully broadcast fade event to room ${GLOBAL_ROOM}`);
+      } catch (error) {
+        console.error(`💬 SERVER CHAT FADE ERROR: Failed to broadcast fade event:`, error);
+      }
     });
     
     // Handle disconnection
     socket.on('disconnect', () => {
-      console.log(`Disconnected: ${socket.id}`);
+      console.log(`👋 SERVER DISCONNECT: User ${userId} disconnected, socket ID: ${socket.id}`);
+      
+      // Check if user was in a room
+      const wasInRoom = io.sockets.adapter.rooms.get(GLOBAL_ROOM)?.has(socket.id) || false;
+      console.log(`�� SERVER DISCONNECT: User ${userId} was in global room: ${wasInRoom}`);
+      
+      // Log active users before removal
+      console.log(`👋 SERVER DISCONNECT: Active users before removal: ${activeUsers.size}`);
       
       // Remove from active users
       activeUsers.delete(userId);
+      console.log(`👋 SERVER DISCONNECT: Active users after removal: ${activeUsers.size}`);
+      
+      // Debug remaining room membership
+      const roomMembers = io.sockets.adapter.rooms.get(GLOBAL_ROOM);
+      const memberCount = roomMembers ? roomMembers.size : 0;
+      console.log(`👋 SERVER DISCONNECT: Room ${GLOBAL_ROOM} now has ${memberCount} members`);
+      
+      // Log remaining users in the room
+      if (roomMembers) {
+        const roomUsers = Array.from(roomMembers).map(socketId => {
+          const user = Array.from(activeUsers.values()).find(u => u.socketId === socketId);
+          return user ? `${user.username} (${socketId})` : socketId;
+        });
+        console.log(`👋 SERVER DISCONNECT: Remaining users in room:`, roomUsers);
+      }
       
       // Inform others
-      io.to(GLOBAL_ROOM).emit('user:left', { userId });
+      try {
+        io.to(GLOBAL_ROOM).emit('user:left', { userId });
+        console.log(`👋 SERVER DISCONNECT: Broadcast user:left event for user ${userId} to room ${GLOBAL_ROOM}`);
+      } catch (error) {
+        console.error(`👋 SERVER DISCONNECT ERROR: Failed to broadcast user:left event:`, error);
+      }
     });
   });
   
