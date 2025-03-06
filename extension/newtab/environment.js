@@ -9,7 +9,7 @@ const isExtension = typeof chrome !== 'undefined' && chrome.runtime && chrome.ru
 // Storage API compatibility layer
 const storage = {
   // Get items from storage
-  get: function(keys, callback) {
+  get: (keys, callback) => {
     if (isExtension) {
       // Use Chrome storage API in extension context
       chrome.storage.local.get(keys, callback);
@@ -17,17 +17,17 @@ const storage = {
       // Use localStorage in web context
       const result = {};
       if (Array.isArray(keys)) {
-        keys.forEach(key => {
+        for (const key of keys) {
           result[key] = localStorage.getItem(key) 
             ? JSON.parse(localStorage.getItem(key)) 
             : null;
-        });
+        }
       } else if (typeof keys === 'object') {
-        Object.keys(keys).forEach(key => {
+        for (const key of Object.keys(keys)) {
           result[key] = localStorage.getItem(key)
             ? JSON.parse(localStorage.getItem(key))
             : keys[key]; // Use default value from keys object
-        });
+        }
       } else if (typeof keys === 'string') {
         result[keys] = localStorage.getItem(keys)
           ? JSON.parse(localStorage.getItem(keys))
@@ -38,28 +38,30 @@ const storage = {
   },
 
   // Set items in storage
-  set: function(items, callback) {
+  set: (items, callback) => {
     if (isExtension) {
       // Use Chrome storage API in extension context
       chrome.storage.local.set(items, callback);
     } else {
       // Use localStorage in web context
-      Object.keys(items).forEach(key => {
+      for (const key of Object.keys(items)) {
         localStorage.setItem(key, JSON.stringify(items[key]));
-      });
+      }
       if (callback) setTimeout(callback, 0); // Simulate async behavior
     }
   },
 
   // Remove items from storage
-  remove: function(keys, callback) {
+  remove: (keys, callback) => {
     if (isExtension) {
       // Use Chrome storage API in extension context
       chrome.storage.local.remove(keys, callback);
     } else {
       // Use localStorage in web context
       if (Array.isArray(keys)) {
-        keys.forEach(key => localStorage.removeItem(key));
+        for (const key of keys) {
+          localStorage.removeItem(key);
+        }
       } else if (typeof keys === 'string') {
         localStorage.removeItem(keys);
       }
@@ -70,7 +72,7 @@ const storage = {
 
 // Profile photo handling
 const profile = {
-  getPhoto: async function() {
+  getPhoto: async () => {
     if (isExtension) {
       // Try to get profile photo from Chrome identity API
       try {
@@ -88,8 +90,12 @@ const profile = {
 
 // Helper function for Chrome extension profile photo
 async function getProfilePhotoFromChrome() {
-  // Implementation would go here if needed
-  // This is a placeholder
+  // If the newtab.js has already loaded and defined the OAuth function, use it
+  if (window.getProfilePhotoViaOAuth) {
+    return await window.getProfilePhotoViaOAuth();
+  }
+  
+  // Otherwise, return null and let the main script handle it later
   return null;
 }
 

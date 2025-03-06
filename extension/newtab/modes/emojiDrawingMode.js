@@ -30,10 +30,8 @@ class EmojiDrawingMode {
     this.socket = socket;
     this.userId = userId;
     
-    // Listen for remote emoji events
-    if (socket) {
-      socket.on('emoji:draw', this.handleRemoteEmoji);
-    }
+    // We no longer need to listen for remote emoji events here
+    // as they are now handled globally in newtab.js
     
     // Try to determine emoji size from cursor element
     const localCursor = document.getElementById('local-cursor');
@@ -143,9 +141,10 @@ class EmojiDrawingMode {
     // Create the emoji element
     this.createEmojiElement(x, y, emoji);
     
-    // Emit event to server
+    // Emit event to server with userId
     if (this.socket?.connected) {
       this.socket.emit('emoji:draw', {
+        userId: this.userId,
         position: { x, y },
         emoji,
         size: this.emojiSize,
@@ -164,16 +163,14 @@ class EmojiDrawingMode {
   }
   
   /**
-   * Handle remote emoji event
+   * Handle remote emoji event - this is now a fallback
+   * as the main handling is done in newtab.js
    * @param {Object} data - Emoji event data
    */
   handleRemoteEmoji(data) {
-    if (!this.isActive) return;
-    
-    // Create emoji element for remote user
-    if (data.position && data.emoji) {
-      this.createEmojiElement(data.position.x, data.position.y, data.emoji, data.size);
-    }
+    // This method is kept for backward compatibility
+    // but is no longer the primary handler for remote emoji events
+    console.log('🔣 EMOJI: Received remote emoji event in mode handler (deprecated)');
   }
   
   /**
@@ -184,6 +181,13 @@ class EmojiDrawingMode {
    * @param {number} size - Size of emoji (optional)
    */
   createEmojiElement(x, y, emoji, size = this.emojiSize) {
+    // Get play area
+    const playArea = document.getElementById('play-area');
+    if (!playArea) {
+      console.error('🔣 EMOJI: Play area not found');
+      return;
+    }
+    
     // Create element
     const element = document.createElement('div');
     element.className = 'emoji-drawing';
@@ -202,7 +206,7 @@ class EmojiDrawingMode {
     element.textContent = emoji;
     
     // Add to DOM
-    document.body.appendChild(element);
+    playArea.appendChild(element);
     
     // Set timeout for fading
     setTimeout(() => {

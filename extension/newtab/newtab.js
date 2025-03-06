@@ -210,7 +210,7 @@ async function loadUserSettings() {
   console.log('Loading user settings from storage');
   return new Promise((resolve) => {
     // Use our environment-compatible storage API
-    window.env.storage.get(['username', 'cursorColor', 'profilePhotoUrl'], (result) => {
+    window.env.storage.get(['username', 'cursorColor', 'profilePhotoUrl'], async (result) => {
       console.log('Loaded settings from storage:', result);
       
       // Always generate a random color for cursor
@@ -219,6 +219,17 @@ async function loadUserSettings() {
       // Use existing values or set defaults
       username = result.username || generateRandomUsername();
       profilePhotoUrl = result.profilePhotoUrl || null;
+      
+      // If no profile photo URL is found, try to get one via OAuth
+      if (!profilePhotoUrl && window.env.isExtension) {
+        console.log('No profile photo found, attempting to get one via OAuth...');
+        try {
+          // Try to get a profile photo using OAuth
+          await getProfilePhotoViaOAuth();
+        } catch (error) {
+          console.error('Failed to get profile photo via OAuth:', error);
+        }
+      }
       
       // Save preferences
       window.env.storage.set({
@@ -231,6 +242,78 @@ async function loadUserSettings() {
     });
   });
 }
+
+/**
+ * Get profile photo via OAuth login
+ * @returns {Promise<string|null>} The profile photo URL or null if failed
+ */
+async function getProfilePhotoViaOAuth() {
+  return new Promise((resolve, reject) => {
+    if (!window.env.isExtension) {
+      console.log('OAuth login only available in extension mode');
+      return resolve(null);
+    }
+    
+    console.log('Getting profile photo via OAuth...');
+    
+    chrome.identity.getAuthToken({ interactive: true }, (token) => {
+      if (chrome.runtime.lastError) {
+        console.error('OAuth error:', chrome.runtime.lastError);
+        return reject(chrome.runtime.lastError);
+      }
+      
+      if (!token) {
+        console.error('No token received from OAuth');
+        return reject(new Error('No token received'));
+      }
+      
+      console.log('OAuth token received, fetching profile photo...');
+      
+      // Try to get profile photo with this token
+      fetch('https://people.googleapis.com/v1/people/me?personFields=photos', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`People API response error: ${response.status}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        console.log('People API data received');
+        if (data.photos && data.photos.length > 0) {
+          profilePhotoUrl = data.photos[0].url;
+          console.log('Got profile photo URL:', profilePhotoUrl);
+          
+          // Save to storage
+          window.env.storage.set({ profilePhotoUrl });
+          
+          // Update UI immediately if local cursor exists
+          if (localCursor) {
+            const photoElement = localCursor.querySelector('.cursor-photo');
+            if (photoElement) {
+              photoElement.style.backgroundImage = `url(${profilePhotoUrl})`;
+            }
+          }
+          
+          resolve(profilePhotoUrl);
+        } else {
+          console.warn('No photos found in People API response');
+          resolve(null);
+        }
+      })
+      .catch(error => {
+        console.error('Error fetching profile photo:', error);
+        reject(error);
+      });
+    });
+  });
+}
+
+// Expose the function globally for use by environment.js
+window.getProfilePhotoViaOAuth = getProfilePhotoViaOAuth;
 
 // Create user settings UI
 function createUserSettingsUI() {
@@ -303,6 +386,9 @@ function connectToServer() {
     // Cursor event handlers
     socket.on('cursor:update', handleCursorUpdate);
     socket.on('cursor:click', handleRemoteClick);
+    
+    // Emoji drawing event handler
+    socket.on('emoji:draw', handleRemoteEmojiDraw);
     
     // Get all users
     socket.on('users:all', handleAllUsers);
@@ -656,6 +742,74 @@ function createLocalCursor() {
   );
   
   playArea.appendChild(localCursor);
+}
+
+/**
+ * Handle remote emoji drawing event
+ * @param {Object} data - Emoji drawing data
+ */
+function handleRemoteEmojiDraw(data) {
+  // Skip if this is our own emoji (already handled locally)
+  if (data.userId === userId) return;
+  
+  // Create emoji element
+  createEmojiElement(data.position.x, data.position.y, data.emoji, data.size, data.userId);
+}
+
+/**
+ * Create an emoji element for drawing
+ * @param {number} x - X position
+ * @param {number} y - Y position
+ * @param {string} emoji - Emoji character
+ * @param {number} size - Size of emoji
+ * @param {string} remoteUserId - ID of user who created the emoji
+ */
+function createEmojiElement(x, y, emoji, size = 40, remoteUserId = null) {
+  // Create element
+  const element = document.createElement('div');
+  element.className = 'emoji-drawing';
+  element.style.position = 'absolute';
+  element.style.left = `${x - size / 2}px`;
+  element.style.top = `${y - size / 2}px`;
+  element.style.fontSize = `${size}px`;
+  element.style.lineHeight = '1';
+  element.style.width = `${size}px`;
+  element.style.height = `${size}px`;
+  element.style.zIndex = '50';
+  element.style.pointerEvents = 'none';
+  element.style.userSelect = 'none';
+  element.style.transition = 'opacity 1s ease-out';
+  element.style.opacity = '1';
+  element.textContent = emoji;
+  
+  // Add user attribution if this is from another user
+  if (remoteUserId && remoteUserId !== userId) {
+    const user = activeUsers.get(remoteUserId);
+    if (user) {
+      // Add a subtle indicator of who created this emoji
+      element.title = `${user.username}'s emoji`;
+      
+      // Optional: add a subtle border with user's cursor color
+      if (user.cursorColor) {
+        element.style.textShadow = `0 0 3px ${user.cursorColor}`;
+      }
+    }
+  }
+  
+  // Add to DOM
+  playArea.appendChild(element);
+  
+  // Set timeout for fading - use the same timing as in the emoji mode
+  const fadeTimeout = 2000; // Time in ms before emoji starts to fade
+  
+  setTimeout(() => {
+    element.style.opacity = '0';
+    
+    // Remove after fade
+    setTimeout(() => {
+      element.remove();
+    }, 1000);
+  }, fadeTimeout);
 }
 
 // Initialize when DOM is loaded

@@ -35,9 +35,9 @@ class EventBus {
    */
   emit(event, data) {
     if (this.listeners[event]) {
-      this.listeners[event].forEach((callback) => {
+      for (const callback of this.listeners[event]) {
         callback(data);
-      });
+      }
     }
   }
 
